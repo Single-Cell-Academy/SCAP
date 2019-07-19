@@ -1,0 +1,18 @@
+// seurat conventions
+
+meta data:
+- include only one set of clustering data per assay, with the name of the data formatted as: "[assay]_clusters"
+
+- include one set of cell type annotations, with the name of the data formatted as: "cell_type"
+
+
+reductions:
+- Supported reductions are tSNE, UMAP, PCA and Diffusion
+- format of reduction name: "[reduction key]_[assay]"
+  * where the reduction key is:
+    - "tsne" for a tSNE
+    - "umap" for a UMAP
+    - "pca" for a PCA
+    - "diff" for a Diffusion
+
+ 
