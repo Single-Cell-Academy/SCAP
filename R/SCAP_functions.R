@@ -1,4 +1,17 @@
 
+######### Programatic trigger ###########
+makeReactiveTrigger <- function() {
+  rv <- reactiveValues(a = 0)
+  list(
+    depend = function() {
+      rv$a
+      invisible()
+    },
+    trigger = function() {
+      rv$a <- isolate(rv$a + 1)
+    }
+  )
+}
 ###### reduc)key ##########
 reduc_key <- function(key){
   if(!any(key == c("TSNE", "UMAP", "PCA", "DIFF")))
@@ -161,7 +174,7 @@ dotPlot <- function(
     mirror=TRUE,
     ticks='outside'
   )
-  print(head(data.plot))
+  #print(head(data.plot))
   
   # plot <- plot_ly(data = data.plot, x = ~features.plot, y = ~id,
   #                 type = 'scatter',

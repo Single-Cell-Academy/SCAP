@@ -1,11 +1,11 @@
 # process seurat to loom
 library(loomR)
 library(hdf5r)
-seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/pbmc_downsample.rds")
+seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/pbmc.rds")
 
 assays <- names(seur@assays)
 
-project_dir <- "/Users/jsjoyal/Desktop/SCAP/test_data/test_project/"
+project_dir <- "/Users/jsjoyal/Desktop/SCAP/test_data/test_project_2/"
 
 for(assay in assays){
   DefaultAssay(seur) <- assay
@@ -14,8 +14,12 @@ for(assay in assays){
   data <- loomR::connect(filename = filename, mode = "r+")
   data$link_delete('row_attrs/Gene')
   # add metadata
-  remove.assays <- paste(c(paste0("_",assays[-which(assays == assay)]),paste0(assays[-which(assays == assay)],"_")),collapse = "|")
-  data$add.col.attribute(as.list(seur@meta.data[,-c(grep(remove.assays,colnames(seur@meta.data)))]))
+  if(length(assay)>1){
+    remove.assays <- paste(c(paste0("_",assays[-which(assays == assay)]),paste0(assays[-which(assays == assay)],"_")),collapse = "|")
+    data$add.col.attribute(as.list(seur@meta.data[,-c(grep(remove.assays,colnames(seur@meta.data)))]))
+  }else{
+    data$add.col.attribute(as.list(seur@meta.data))
+  }
   data$add.row.attribute(list(features = rownames(seur[[assay]])))
   # add reductions
   reductions <- tolower(paste0(c("pca","tsne","umap","diff"),"_",assay,"_",c(2,2,2,2,3,3,3,3),"d"))

@@ -4,7 +4,7 @@ meta data:
 - include only one set of clustering data per assay, with the name of the data formatted as: "[assay]_clusters"
 
 - include one set of cell type annotations, with the name of the data formatted as: "cell_type"
-
+- include one the same set of cell type annotations as: "cell_type_orig"
 
 reductions:
 - Supported reductions are tSNE, UMAP, PCA and Diffusion
@@ -14,5 +14,6 @@ reductions:
     - "umap" for a UMAP
     - "pca" for a PCA
     - "diff" for a Diffusion
-
+- format cell.embeddings colnames as "[reduction key]_[assay]_[dim]_[component]"
+	* where dim is either '2d' or '3d'
  
