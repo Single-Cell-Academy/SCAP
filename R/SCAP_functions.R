@@ -53,21 +53,16 @@ dotPlot <- function(
     'radius' = scale_radius,
     stop("'scale.by' must be either 'size' or 'radius'")
   )
-  #n <- NULL
-  #for(i in features){
-  #  n <- c(n,which(data$row.attrs$features[]%in%i))
-  #}
-  #if(identical(n,integer(0))) return(NULL)
-  #data.features <- as.data.frame(data[['matrix']][,n])
+  group.by <- paste0(group.by,'.viz')
+  if(!any(names(data$col.attrs) == group.by) | !any(features%in%data$row.attrs$features[])){
+    return(NULL)
+  }
   data.features <- as.data.frame(data[['matrix']][,which(data$row.attrs$features[]%in%features)])
   if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
   rownames(data.features) <- data$col.attrs$CellID[]
   colnames(data.features)[1:length(features)] <- features
-  data.features$id <- if (is.null(x = group.by)) {
-    data[[paste0("col_attrs/",tolower(assay),"_clusters")]][drop=TRUE]
-  } else {
-    data[[paste0("col_attrs/",group.by)]][drop=TRUE]
-  }
+  data.features$id <- data[[paste0("col_attrs/",group.by)]][drop=TRUE]
+  
   if (!is.factor(x = data.features$id)) {
     data.features$id <- factor(x = data.features$id)
   }
@@ -174,15 +169,6 @@ dotPlot <- function(
     mirror=TRUE,
     ticks='outside'
   )
-  #print(head(data.plot))
-  
-  # plot <- plot_ly(data = data.plot, x = ~features.plot, y = ~id,
-  #                 type = 'scatter',
-  #                 mode = 'markers',
-  #                 size = ~pct.exp,
-  #                 color = ~avg.exp.scaled
-  #                 ) %>% layout(title = "", xaxis = ax.x, yaxis = ax.y)
-
   plot <- ggplot(data = data.plot, mapping = aes_string(x = 'features.plot', y = 'id')) +
     geom_point(mapping = aes_string(size = 'pct.exp', color = color.by)) +
     #scale.func(range = c(0, dot.scale), limits = c(scale.min, scale.max)) +
@@ -205,3 +191,180 @@ dotPlot <- function(
   return(plot)
 }
 
+######## dimPlotlyOutput #######
+dimPlotlyOutput <- function(assay.in, reduc.in, group.by, data){
+  
+  #print(paste(assay.in, reduc.in, group.by))
+  group.by <- paste0(group.by,'.viz')
+  if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
+    #print('1')
+    return(NULL)
+  }
+  if(!any(names(data[[assay.in]]$col.attrs) == group.by)){
+    #print('3')
+    return(NULL)
+  }
+  #print('4')
+
+  n <- if(grepl("2d", reduc.in)){
+    2
+  }else{
+    3
+  }
+  
+  #print(paste0("fun: ",assay.in))
+  reduc <- names(data[[assay.in]]$col.attrs)[grepl(reduc.in,names(data[[assay.in]]$col.attrs))]
+  #print(reduc)
+  if(group.by == "cluster"){
+    plot.data <- data[[assay.in]]$get.attribute.df(attributes=c(reduc,tolower(paste0(assay.in,"_","clusters")),'percent.mt'))
+  }
+  else{
+    plot.data <- data[[assay.in]]$get.attribute.df(attributes=c(reduc,group.by,'percent.mt'))
+  }
+  #print(head(plot.data))
+  key <- reduc_key(key = toupper(sub("_.*","",reduc.in)))
+  
+  ax.x <- list(
+    title = paste0(key,"_1"),
+    zeroline = FALSE,
+    showline = TRUE,
+    showticklabels = FALSE,
+    showgrid = FALSE,
+    mirror=TRUE,
+    ticks='none'
+  )
+  ax.y <- list(
+    title = paste0(key,"_2"),
+    zeroline = FALSE,
+    showline = TRUE,
+    showticklabels = FALSE,
+    showgrid = FALSE,
+    mirror=TRUE,
+    ticks='none'
+  )
+  
+  ax.z <- list(
+    title = paste0(key,"_3"),
+    zeroline = FALSE,
+    showline = TRUE,
+    showticklabels = FALSE,
+    showgrid = FALSE,
+    mirror=TRUE,
+    ticks='none'
+  )
+  
+  #print(head(plot.data))
+  if(n == 2){
+    p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], 
+                 type = 'scatter', mode = 'markers', 
+                 color = plot.data[,3], text =  ~paste0(
+                   key,"_1: ", format(plot.data[,1],digits=3),"\n",
+                   "</br>",key,"_2: ", format(plot.data[,2],digits=3), "\n",
+                   "</br>percent.mt: ", format(plot.data[,4],digits=3), "%"), 
+                 hovertemplate = paste0('<b>%{text}</b>')
+    ) %>% layout(title = paste0(assay.in, " data coloured by ", sub('.viz','',group.by)) ,xaxis = ax.x, yaxis = ax.y)
+  }else{
+    p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], z = plot.data[,3],
+                 type = 'scatter3d', mode = 'markers', 
+                 color = plot.data[,4], text =  ~paste0(
+                   key,"_1: ", format(plot.data[,1],digits=3),"\n",
+                   "</br>",key,"_2: ", format(plot.data[,2],digits=3), "\n",
+                   "</br>",key,"_3: ", format(plot.data[,3],digits=3), "\n",
+                   "</br>percent.mt: ", format(plot.data[,5],digits=3), "%"), 
+                 hovertemplate = paste0('<b>%{text}</b>')
+    ) %>% layout(title = paste0(assay.in, " data coloured by ", sub('.viz','',group.by)) ,scene = list(xaxis = ax.x, yaxis = ax.y, zaxis = ax.z),legend = list(x = 100, y = 0.5))
+  }
+  return(p)
+}
+
+####### featurePlotlyOutput ##########
+featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, data){
+  
+  group.by <- paste0(group.by,'.viz')
+  if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
+    #print('1')
+    return(NULL)
+  }
+  if(!any(names(data[[assay.in]]$col.attrs) == group.by)){
+    print('3')
+    return(NULL)
+  }
+  #print('4')
+  
+  
+  data.features <- as.data.frame(data[[assay.in]][['matrix']][,which(data[[assay.in]]$row.attrs$features[]%in%feature.in)])
+  if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
+  if(group.by == 'cluster'){
+    data.annot <- data[[assay.in]]$get.attribute.df(attributes=tolower(paste0(assay.in,"_clusters")))
+  }else{
+    data.annot <- data[[assay.in]]$get.attribute.df(attributes=group.by)
+  }
+  rownames(data.features) <- data[[assay.in]]$col.attrs$CellID[]
+  colnames(data.features) <- feature.in
+  
+  n <- if(grepl("2d", reduc.in)){
+    2
+  }else{
+    3
+  }
+  
+  dims <- names(data[[assay.in]]$col.attrs)[grepl(reduc.in,names(data[[assay.in]]$col.attrs))]
+  
+  plot.data <- data[[assay.in]]$get.attribute.df(attributes=dims)
+  plot.data <- cbind(plot.data,data.annot)
+  plot.data <- cbind(plot.data,data.features)
+  
+  key <- reduc_key(key = toupper(sub("_.*","",reduc.in)))
+  
+  ax.x <- list(
+    title = paste0(key,"_1"),
+    zeroline = FALSE,
+    showline = TRUE,
+    showticklabels = FALSE,
+    showgrid = FALSE,
+    mirror=TRUE,
+    ticks='none'
+  )
+  ax.y <- list(
+    title = paste0(key,"_2"),
+    zeroline = FALSE,
+    showline = TRUE,
+    showticklabels = FALSE,
+    showgrid = FALSE,
+    mirror=TRUE,
+    ticks='none'
+  )
+  ax.z <- list(
+    title = paste0(key,"_3"),
+    zeroline = FALSE,
+    showline = TRUE,
+    showticklabels = FALSE,
+    showgrid = FALSE,
+    mirror=TRUE,
+    ticks='none'
+  )
+  
+  if(n == 2){
+    p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2],
+                 type = 'scatter', mode = 'markers', 
+                 color = plot.data[,4],text =  ~paste0(
+                   key,"_1: ", format(plot.data[,1],digits=3),"\n",
+                   "</br>",key,"_2: ", format(plot.data[,2],digits=3), "\n",
+                   "</br>",group.by,": ", plot.data[,3]), 
+                 hovertemplate = paste0('<b>%{text}</b>',
+                                        '<extra></extra>')
+    ) %>% layout(title = feature.in ,xaxis = ax.x, yaxis = ax.y)
+  }else{
+    p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], z = plot.data[,3],
+                 type = 'scatter3d', mode = 'markers', 
+                 color = plot.data[,5],text =  ~paste0(
+                   key,"_1: ", format(plot.data[,1],digits=3),"\n",
+                   "</br>",key,"_2: ", format(plot.data[,2],digits=3), "\n",
+                   "</br>",key,"_3: ", format(plot.data[,3],digits=3), "\n",
+                   "</br>",group.by,": ", plot.data[,4]), 
+                 hovertemplate = paste0('<b>%{text}</b>',
+                                        '<extra></extra>')
+    ) %>% layout(title = feature.in , scene = list(xaxis = ax.x, yaxis = ax.y, zaxis = ax.z), legend = list(x = 100, y = 0.5))
+  }
+  return(p)
+}

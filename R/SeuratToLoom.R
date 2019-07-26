@@ -1,11 +1,11 @@
 # process seurat to loom
 library(loomR)
 library(hdf5r)
-seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/pbmc.rds")
+seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/pbmc_downsample.rds")
 
 assays <- names(seur@assays)
 
-project_dir <- "/Users/jsjoyal/Desktop/SCAP/test_data/test_project_2/"
+project_dir <- "/Users/jsjoyal/Desktop/SCAP/test_data/test_project/"
 
 for(assay in assays){
   DefaultAssay(seur) <- assay
