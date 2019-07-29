@@ -38,28 +38,28 @@ ui <- navbarPage(fluid = TRUE,
       uiOutput('grouping.1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
       uiOutput('featureplot.1.feature.select') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
       uiOutput('dotplot.1.feature.select') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
-    ),
-    mainPanel(
-      "",
-      fluidRow(style='padding:100px;',
-        column(
-          width = 6,
-          plotlyOutput('dimplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
-        ),
-        column(
-          width = 6,
-          plotlyOutput('featureplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
-        ),
-        div(style = "height:10px;")
-      ),
-      fluidRow(
-        column(
-          width = 12, 
-          offset = 0,
-          plotOutput('dotplot.1', height = '500px', width = '100%')%>% withSpinner(color="black")
-        )
-      )
-    )
+    )#,
+    # mainPanel(
+    #   "",
+    #   fluidRow(style='padding:100px;',
+    #     column(
+    #       width = 6,
+    #       plotlyOutput('dimplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
+    #     ),
+    #     column(
+    #       width = 6,
+    #       plotlyOutput('featureplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
+    #     ),
+    #     div(style = "height:10px;")
+    #   ),
+    #   fluidRow(
+    #     column(
+    #       width = 12, 
+    #       offset = 0,
+    #       plotOutput('dotplot.1', height = '500px', width = '100%')%>% withSpinner(color="black")
+    #     )
+    #   )
+    # )
   )#,
   # tabPanel(
   #   "Cell Annotation",
@@ -139,13 +139,15 @@ server <- function(input, output, session){
   source("./R/SCAP_functions.R")
   
   ###### import data ######
-  files <- list.files("./test_data/test_project/")
+  files <- list.files("./test_data/test_project_4/")
   assays <- assays <- sub(".loom","",files)
   data <- list()
   for(i in 1:length(assays)){
-    data[[i]] <- connect(paste0("./test_data/test_project/",files[i]), mode = "r+")
+    data[[i]] <- connect(paste0("./test_data/test_project_4/",files[i]), mode = "r+")
   }
   names(data) <- assays
+  
+  print(data)
   
   ## Golbal Variables ##
   grouping_options_old <- NULL
@@ -163,10 +165,9 @@ server <- function(input, output, session){
     assay <- input$assay.1
     #print(assay)
     #reduction
-    options <- c("pca", "tsne", "umap", "diff")
+    options <- names(data[[assay]]$col.attrs)
     l.assay <- tolower(assay)
-    options <- paste(c("pca", "tsne", "umap", "diff"), l.assay,sep = "_")
-    reductions <- unique(sub("_.$","",names(data[[assay]]$col.attrs)[grepl(paste(options,collapse="|"),names(data[[assay]]$col.attrs))]))
+    reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options)&grepl(l.assay,options))]))
     selectInput(inputId = 'reduction.1', 'Select Reduction', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
   })
 
@@ -174,78 +175,79 @@ server <- function(input, output, session){
     req(input$assay.1)
     assay <- input$assay.1
     #grouping
-    grouping_options <- sub('.viz','',names(data[[assay]]$col.attrs)[grep('.viz',names(data[[assay]]$col.attrs))])
+    cols <- names(data[[assay]]$col.attrs)
+    grouping_options <- cols[grep('_meta_data$',cols)]
     if(!is.null(grouping_options_old) & (length(grouping_options)!=length(grouping_options_old))){
-      sel <- grouping_options[!grouping_options%in%grouping_options_old]
+      sel <- sub("_meta_data$", "", grouping_options[!grouping_options%in%grouping_options_old])
     }else{
-      sel <- grouping_options
+      sel <- sub("_meta_data$", "", grouping_options)
     }
     grouping_options_old <<- grouping_options
 
-    selectInput(inputId = 'grouping.1', label = 'Choose Annotations', choices = grouping_options, selected = sel, multiple = FALSE)
+    selectInput(inputId = 'grouping.1', label = 'Choose Annotations', choices = sub("_meta_data$","",grouping_options), selected = sel, multiple = FALSE)
   })
-  
-  output$featureplot.1.feature.select<- renderUI({
-    req(input$assay.1)
-    assay <- input$assay.1
-    selectInput(inputId = 'featureplot.1.feature.select', label = 'Choose Features for Feature Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
-  })
-  output$dotplot.1.feature.select<- renderUI({
-    req(input$assay.1)
-    assay <- input$assay.1
-    selectInput(inputId = 'dotplot.1.feature.select', label = 'Choose Features for Dot Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][3], multiple = TRUE)
-  })
-  
-  # ############### Dim Plot ################
+  # 
+  # output$featureplot.1.feature.select<- renderUI({
+  #   req(input$assay.1)
+  #   assay <- input$assay.1
+  #   selectInput(inputId = 'featureplot.1.feature.select', label = 'Choose Features for Feature Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
+  # })
+  # output$dotplot.1.feature.select<- renderUI({
+  #   req(input$assay.1)
+  #   assay <- input$assay.1
+  #   selectInput(inputId = 'dotplot.1.feature.select', label = 'Choose Features for Dot Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][3], multiple = TRUE)
+  # })
+  # 
+  ############### Dim Plot ################
   output$dimplot.1 <- renderPlotly({
     req(input$grouping.1)
     dimPlotlyOutput(assay.in = input$assay.1, reduc.in = input$reduction.1, group.by = input$grouping.1, data = data)
   })
-  
-  ########## Feature Plot #####################
-  output$featureplot.1 <- renderPlotly({
-    req(input$featureplot.1.feature.select)
-    featurePlotlyOutput(assay.in = input$assay.1, reduc.in = input$reduction.1, group.by = input$grouping.1, feature.in = input$featureplot.1.feature.select, data = data)
-  })
-  
-  ######### Dot Plot #########
-  output$dotplot.1 <- renderPlot({
-    req(input$dotplot.1.feature.select)
 
-    group.by <- input$grouping.1
-    assay <- input$assay.1
-
-    ax.x <- list(
-      title = "Features",
-      zeroline = FALSE,
-      showline = TRUE,
-      showticklabels = TRUE,
-      showgrid = FALSE,
-      mirror=TRUE,
-      ticks='outside',
-      tickangle = -45
-    )
-    ax.y <- list(
-      title = "Identity",
-      zeroline = FALSE,
-      showline = TRUE,
-      showticklabels = TRUE,
-      showgrid = FALSE,
-      mirror=TRUE,
-      ticks='outside'
-    )
-    
-    p <- dotPlot(data = data[[assay]], assay = assay, features = input$dotplot.1.feature.select, group.by = group.by)
-    
-    if(is.null(p)) return(NULL)
-    if(identical(class(p),"shiny.tag")) return(NULL)
-    
-    p <- p + guides(color = guide_colourbar(order = 1, title = "Average Expression"), size = guide_legend(order = 2, title = "Percent Expressed")) + theme_few()
-    
-    return(p)
-  })
+  # ########## Feature Plot #####################
+  # output$featureplot.1 <- renderPlotly({
+  #   req(input$featureplot.1.feature.select)
+  #   featurePlotlyOutput(assay.in = input$assay.1, reduc.in = input$reduction.1, group.by = input$grouping.1, feature.in = input$featureplot.1.feature.select, data = data)
+  # })
+  # 
+  # ######### Dot Plot #########
+  # output$dotplot.1 <- renderPlot({
+  #   req(input$dotplot.1.feature.select)
+  # 
+  #   group.by <- input$grouping.1
+  #   assay <- input$assay.1
+  # 
+  #   ax.x <- list(
+  #     title = "Features",
+  #     zeroline = FALSE,
+  #     showline = TRUE,
+  #     showticklabels = TRUE,
+  #     showgrid = FALSE,
+  #     mirror=TRUE,
+  #     ticks='outside',
+  #     tickangle = -45
+  #   )
+  #   ax.y <- list(
+  #     title = "Identity",
+  #     zeroline = FALSE,
+  #     showline = TRUE,
+  #     showticklabels = TRUE,
+  #     showgrid = FALSE,
+  #     mirror=TRUE,
+  #     ticks='outside'
+  #   )
+  #   
+  #   p <- dotPlot(data = data[[assay]], assay = assay, features = input$dotplot.1.feature.select, group.by = group.by)
+  #   
+  #   if(is.null(p)) return(NULL)
+  #   if(identical(class(p),"shiny.tag")) return(NULL)
+  #   
+  #   p <- p + guides(color = guide_colourbar(order = 1, title = "Average Expression"), size = guide_legend(order = 2, title = "Percent Expressed")) + theme_few()
+  #   
+  #   return(p)
+  # })
   
-  
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
   
   ######### Select input for reduction ##########
 

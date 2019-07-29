@@ -1,3 +1,17 @@
+seurat_reduc_key_name <- function(object, reduction_name = NULL, key_as_name = TRUE, key_name = NULL){
+  if(reduction_name==FALSE) stop('ERROR: you must specify the reduction name')
+  if(key_as_name == FALSE && is.null(key_name)){
+    stop('ERROR: If you do not want to set the key name to the reduction name, a key name must be specified')
+  }else if(key_as_name == TRUE && !is.null(key_name)){
+    key_name <- reduction_name
+  }
+  embeddings <- object@reductions[[reduction_name]]@cell.embeddings
+  n <- ncol(embeddings)
+  if(n<2 || n>3) stop(paste0('invalid number of reduced dimensions for visualization: ',n))
+  colnames(embeddings) <- paste0(key_name,"_",1:n)
+  object@reductions[[reduction_name]]@cell.embeddings <- embeddings
+  return(object)
+}
 
 ######### Programatic trigger ###########
 makeReactiveTrigger <- function() {
@@ -12,7 +26,7 @@ makeReactiveTrigger <- function() {
     }
   )
 }
-###### reduc)key ##########
+###### reduc_key ##########
 reduc_key <- function(key){
   if(!any(key == c("TSNE", "UMAP", "PCA", "DIFF")))
     stop("Reduction unknown")
@@ -26,6 +40,7 @@ reduc_key <- function(key){
     return("UMAP")
 }
 
+###### percentAbove #######
 percentAbove <- function(x, threshold){
   return(length(x = x[x > threshold]) / length(x = x))
 }
@@ -194,32 +209,31 @@ dotPlot <- function(
 ######## dimPlotlyOutput #######
 dimPlotlyOutput <- function(assay.in, reduc.in, group.by, data){
   
+  col.attrs <- names(data[[assay.in]]$col.attrs)
+  
   #print(paste(assay.in, reduc.in, group.by))
-  group.by <- paste0(group.by,'.viz')
+  group.by <- paste0(group.by,'_meta_data')
   if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
-    #print('1')
     return(NULL)
   }
-  if(!any(names(data[[assay.in]]$col.attrs) == group.by)){
-    #print('3')
+  if(!any(col.attrs == group.by)){
     return(NULL)
-  }
-  #print('4')
-
-  n <- if(grepl("2d", reduc.in)){
-    2
-  }else{
-    3
   }
   
-  #print(paste0("fun: ",assay.in))
-  reduc <- names(data[[assay.in]]$col.attrs)[grepl(reduc.in,names(data[[assay.in]]$col.attrs))]
-  #print(reduc)
+  reduc <- col.attrs[grepl(reduc.in,col.attrs)]
+  n <- length(reduc)
+  if(n >2)
+
   if(group.by == "cluster"){
     plot.data <- data[[assay.in]]$get.attribute.df(attributes=c(reduc,tolower(paste0(assay.in,"_","clusters")),'percent.mt'))
   }
   else{
     plot.data <- data[[assay.in]]$get.attribute.df(attributes=c(reduc,group.by,'percent.mt'))
+  }
+  
+  ann <- 50
+  if(length(unique(plot.data[,3]))>ann){
+    showNotification(ui = paste0('Warning: The annotations you chose contains over ', ann, 'unique annotations and may not be suitable for vizualization'),type = 'warning')
   }
   #print(head(plot.data))
   key <- reduc_key(key = toupper(sub("_.*","",reduc.in)))
