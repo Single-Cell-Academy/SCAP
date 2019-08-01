@@ -1,7 +1,7 @@
 # process seurat to loom
 library(loomR)
 library(hdf5r)
-seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/pbmc_downsample.rds")
+seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/integrated.attempt.9.rds")
 
 assays <- names(seur@assays)
 
@@ -50,6 +50,13 @@ for(assay in assays){
     if(is.null(reduc.data)) next
     red.df <- as.data.frame(reduc.data@cell.embeddings)
     n <- ncol(red.df)
+    if(grepl('pca_',reduc)){
+      if(grepl('_2d',reduc)){
+        n <- 2
+      }else if(grepl('_3d',reduc)){
+        n <- 3
+      }
+    }
     colnames(red.df) <- paste0(reduc,'_',1:n,'_reduction')
     data$add.col.attribute(as.list(red.df[,1:n]))
   }

@@ -1,5 +1,5 @@
 #################### load required packages ###############
-pkgs <- c('shiny','Seurat','ggplot2','ggthemes','BiocManager','plotly','cowplot', 'dplyr','devtools','shinyjqui','shinythemes')
+pkgs <- c('shiny','Seurat','ggplot2','ggthemes','BiocManager','plotly','cowplot', 'dplyr','devtools','shinyjqui','shinythemes','gtools')
 lapply(X = pkgs, FUN = function(x){
   if(!require(x, character.only = TRUE))
     install.packages(x, repos = 'https://cloud.r-project.org/')
@@ -26,7 +26,8 @@ library(loomR)
 #                   User Interface                        #
 #_________________________________________________________#
 
-ui <- navbarPage(fluid = TRUE,
+ui <- navbarPage(
+  fluid = TRUE,
   theme = shinytheme('cosmo'),
   title = "Single Cell Analysis Portal",
   tabPanel(
@@ -38,76 +39,99 @@ ui <- navbarPage(fluid = TRUE,
       uiOutput('grouping.1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
       uiOutput('featureplot.1.feature.select') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
       uiOutput('dotplot.1.feature.select') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
-    )#,
-    # mainPanel(
-    #   "",
-    #   fluidRow(style='padding:100px;',
-    #     column(
-    #       width = 6,
-    #       plotlyOutput('dimplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
+    ),
+    mainPanel(
+      "",
+      fluidRow(style='padding:100px;',
+               column(
+                 width = 6,
+                 plotlyOutput('dimplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
+               ),
+               column(
+                 width = 6,
+                 plotlyOutput('featureplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
+               ),
+               div(style = "height:10px;")
+      ),
+      fluidRow(
+        column(
+          width = 12,
+          offset = 0,
+          plotOutput('dotplot.1', height = '500px', width = '100%')%>% withSpinner(color="black")
+        )
+      )
+    )
+  ),
+  tabPanel(
+    "Cell Annotation",
+    sidebarPanel(
+      uiOutput('assay.2'),
+      tabsetPanel(
+        id = 'annot_panel',
+        tabPanel(
+          value = 'cluster',
+          "Annotate Clusters",
+          uiOutput('grouping.2'),
+          #uiOutput('annots'),
+          textInput('new_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
+          actionButton("setCellsTypes", "Rename Clusters/Cells")
+        ),
+        tabPanel(
+          value = 'custom',
+          "Custom Annotations",
+          textInput('custom_name','Name Selected Cluster', placeholder = "Enter cluster name here..."),
+          actionButton("add_to_tmp", "Add Annotation"),
+          textInput('custom_scheme','Name Custom Scheme', placeholder = "Enter scheme name here..."),
+          actionButton("save_custom_scheme", "Save Custom Annotations")
+        )
+      ),
+      uiOutput('reduction.2'),
+      uiOutput('featureplot.2.feature.select'),
+    #   tabsetPanel(
+    #     id = 'annot_panel',
+    #     tabPanel(
+    #       value = 'cluster',
+    #       "Annotate Clusters",
+    #       uiOutput('group.by.2'),
+    #       uiOutput('annots'),
+    #       textInput('new_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
+    #       actionButton("setCellsTypes", "Rename Clusters/Cells")
     #     ),
-    #     column(
-    #       width = 6,
-    #       plotlyOutput('featureplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
-    #     ),
-    #     div(style = "height:10px;")
-    #   ),
-    #   fluidRow(
-    #     column(
-    #       width = 12, 
-    #       offset = 0,
-    #       plotOutput('dotplot.1', height = '500px', width = '100%')%>% withSpinner(color="black")
+    #     tabPanel(
+    #       value = 'custom',
+    #       "Custom Annotations",
+    #       textInput('custom_name','Name Selected Cluster', placeholder = "Enter cluster name here..."),
+    #       actionButton("add_to_tmp", "Add Annotation"),
+    #       textInput('custom_scheme','Name Custom Scheme', placeholder = "Enter scheme name here..."),
+    #       actionButton("save_custom_scheme", "Save Custom Annotations")
     #     )
-    #   )
-    # )
+    #   ),
+    h4("Selected Cells"),
+    tableOutput('selected_cells'),
+    tags$head(tags$style("#cells{overflow-y:scroll; max-height: 200px; background: ghostwhite;}"))
+    ),
+    mainPanel(
+      fluidRow(
+        style='padding:100px;',
+        column(
+          width = 6,
+          plotlyOutput('dimplot.2', height = '100%', width = '100%')%>% withSpinner(color="black")
+        ),
+        column(
+          width = 6,
+          plotlyOutput('featureplot.2', height = '100%', width = '100%')%>% withSpinner(color="black")
+        )
+      ),
+      fluidRow(
+        style='padding:50px;',
+        actionButton('find.markers', "Find Markers for Selected Cells"),
+        h4('To clear selection... Double click on either plot and click button')
+      ),
+      fluidRow(
+        tableOutput('markers') %>% withSpinner(color="black")
+      )
+    )
   )#,
-  # tabPanel(
-  #   "Cell Annotation",
-  #   sidebarPanel(
-  #     uiOutput('assay.2'),
-  #     uiOutput('reduc.2'),
-  #     uiOutput('feature.select3'),
-  #     tabsetPanel(
-  #       id = 'annot_panel',
-  #       tabPanel(
-  #         value = 'cluster',
-  #         "Annotate Clusters",
-  #         uiOutput('group.by.2'),
-  #         uiOutput('annots'),
-  #         textInput('new_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
-  #         actionButton("setCellsTypes", "Rename Clusters/Cells")
-  #       ),
-  #       tabPanel(
-  #         value = 'custom',
-  #         "Custom Annotations",
-  #         textInput('custom_name','Name Selected Cluster', placeholder = "Enter cluster name here..."),
-  #         actionButton("add_to_tmp", "Add Annotation"),
-  #         textInput('custom_scheme','Name Custom Scheme', placeholder = "Enter scheme name here..."),
-  #         actionButton("save_custom_scheme", "Save Custom Annotations")
-  #       )
-  #     ),
-  #     h4("Selected Cells"),
-  #     tableOutput('cells'),
-  #     tags$head(tags$style("#cells{overflow-y:scroll; max-height: 200px; background: ghostwhite;}"))
-  #   ),
-  #   mainPanel(
-  #     fluidRow(style='padding:100px;',
-  #       column(width = 6,
-  #              plotlyOutput('annot.select.cluster', height = '100%', width = '100%')%>% withSpinner(color="black")
-  #              ),
-  #       column(width = 6,
-  #              plotlyOutput('annot.select.feature', height = '100%', width = '100%')%>% withSpinner(color="black")
-  #              )
-  #     ),
-  #     fluidRow(style='padding:50px;',
-  #       actionButton('find.markers', "Find Markers for Selected Cells"),
-  #       h4('To clear selection... Double click on either plot and click button')
-  #       ),
-  #     fluidRow(
-  #       tableOutput('markers') %>% withSpinner(color="black")
-  #     )
-  #   )
-  # ),
   # tabPanel(
   #   "Create Custom Meta Data Groupings",
   #   sidebarPanel(
@@ -146,180 +170,205 @@ server <- function(input, output, session){
     data[[i]] <- connect(paste0("./test_data/test_project_4/",files[i]), mode = "r+")
   }
   names(data) <- assays
-  
-  print(data)
-  
-  ## Golbal Variables ##
-  grouping_options_old <- NULL
-  
+
   ####################### MAIN TAB ########################
   #                                                       #
   ####################### MAIN TAB ########################
   
-
+  # Golbal variables used by this tab
+  grouping_options_old <- NULL
+  
   ########## Select Input for Assay ##############
   output$assay.1 <- renderUI({selectInput('assay.1', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))})
+  
+  output$grouping.1 <- renderUI({
+    req(input$assay.1)
+    assay <- input$assay.1
+    cols <- names(data[[assay]]$col.attrs)
+    grouping_options <- cols[grep('_meta_data$',cols)]
+    if(!is.null(grouping_options_old) & (length(grouping_options)!= length(grouping_options_old))){
+      sel <- sub("_meta_data$", "", grouping_options[!grouping_options%in%grouping_options_old])
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
+        sel <- paste0(tolower(assay),"_clusters")
+    }else{
+      sel <- sub("_meta_data","",grouping_options[1])
+    }
+    grouping_options_old <<- grouping_options
+    
+    selectInput(inputId = 'grouping.1', label = 'Group By', choices = sub("_meta_data$","",grouping_options), selected = sel, multiple = FALSE)
+  })
   
   output$reduction.1 <- renderUI({
     req(input$assay.1)
     assay <- input$assay.1
-    #print(assay)
-    #reduction
     options <- names(data[[assay]]$col.attrs)
     l.assay <- tolower(assay)
     reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options)&grepl(l.assay,options))]))
-    selectInput(inputId = 'reduction.1', 'Select Reduction', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
+    selectInput(inputId = 'reduction.1', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
   })
-
-  output$grouping.1 <- renderUI({
+  
+  output$featureplot.1.feature.select<- renderUI({
     req(input$assay.1)
     assay <- input$assay.1
-    #grouping
-    cols <- names(data[[assay]]$col.attrs)
-    grouping_options <- cols[grep('_meta_data$',cols)]
-    if(!is.null(grouping_options_old) & (length(grouping_options)!=length(grouping_options_old))){
-      sel <- sub("_meta_data$", "", grouping_options[!grouping_options%in%grouping_options_old])
-    }else{
-      sel <- sub("_meta_data$", "", grouping_options)
-    }
-    grouping_options_old <<- grouping_options
-
-    selectInput(inputId = 'grouping.1', label = 'Choose Annotations', choices = sub("_meta_data$","",grouping_options), selected = sel, multiple = FALSE)
+    selectInput(inputId = 'featureplot.1.feature.select', label = 'Select a Feature to Visualize on the Feature Plot (right)', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
   })
-  # 
-  # output$featureplot.1.feature.select<- renderUI({
-  #   req(input$assay.1)
-  #   assay <- input$assay.1
-  #   selectInput(inputId = 'featureplot.1.feature.select', label = 'Choose Features for Feature Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
-  # })
-  # output$dotplot.1.feature.select<- renderUI({
-  #   req(input$assay.1)
-  #   assay <- input$assay.1
-  #   selectInput(inputId = 'dotplot.1.feature.select', label = 'Choose Features for Dot Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][3], multiple = TRUE)
-  # })
-  # 
+  output$dotplot.1.feature.select<- renderUI({
+    req(input$assay.1)
+    assay <- input$assay.1
+    selectInput(inputId = 'dotplot.1.feature.select', label = 'Choose Features to Visualize on Dot Plot (bottom)', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][3], multiple = TRUE)
+  })
+  
   ############### Dim Plot ################
   output$dimplot.1 <- renderPlotly({
     req(input$grouping.1)
     dimPlotlyOutput(assay.in = input$assay.1, reduc.in = input$reduction.1, group.by = input$grouping.1, data = data)
   })
 
-  # ########## Feature Plot #####################
-  # output$featureplot.1 <- renderPlotly({
-  #   req(input$featureplot.1.feature.select)
-  #   featurePlotlyOutput(assay.in = input$assay.1, reduc.in = input$reduction.1, group.by = input$grouping.1, feature.in = input$featureplot.1.feature.select, data = data)
-  # })
-  # 
-  # ######### Dot Plot #########
-  # output$dotplot.1 <- renderPlot({
-  #   req(input$dotplot.1.feature.select)
-  # 
-  #   group.by <- input$grouping.1
-  #   assay <- input$assay.1
-  # 
-  #   ax.x <- list(
-  #     title = "Features",
-  #     zeroline = FALSE,
-  #     showline = TRUE,
-  #     showticklabels = TRUE,
-  #     showgrid = FALSE,
-  #     mirror=TRUE,
-  #     ticks='outside',
-  #     tickangle = -45
-  #   )
-  #   ax.y <- list(
-  #     title = "Identity",
-  #     zeroline = FALSE,
-  #     showline = TRUE,
-  #     showticklabels = TRUE,
-  #     showgrid = FALSE,
-  #     mirror=TRUE,
-  #     ticks='outside'
-  #   )
-  #   
-  #   p <- dotPlot(data = data[[assay]], assay = assay, features = input$dotplot.1.feature.select, group.by = group.by)
-  #   
-  #   if(is.null(p)) return(NULL)
-  #   if(identical(class(p),"shiny.tag")) return(NULL)
-  #   
-  #   p <- p + guides(color = guide_colourbar(order = 1, title = "Average Expression"), size = guide_legend(order = 2, title = "Percent Expressed")) + theme_few()
-  #   
-  #   return(p)
-  # })
+  ########## Feature Plot #####################
+  output$featureplot.1 <- renderPlotly({
+    req(input$featureplot.1.feature.select)
+    featurePlotlyOutput(assay.in = input$assay.1, reduc.in = input$reduction.1, group.by = input$grouping.1, feature.in = input$featureplot.1.feature.select, data = data)
+  })
+   
+  ######### Dot Plot #########
+  output$dotplot.1 <- renderPlot({
+    req(input$dotplot.1.feature.select)
+    
+    group.by <- input$grouping.1
+    assay <- input$assay.1
+    
+    ax.x <- list(
+      title = "Features",
+      zeroline = FALSE,
+      showline = TRUE,
+      showticklabels = TRUE,
+      showgrid = FALSE,
+      mirror=TRUE,
+      ticks='outside',
+      tickangle = -45
+    )
+    ax.y <- list(
+      title = "Identity",
+      zeroline = FALSE,
+      showline = TRUE,
+      showticklabels = TRUE,
+      showgrid = FALSE,
+      mirror=TRUE,
+      ticks='outside'
+    )
+    p <- dotPlot(data = data[[assay]], assay = assay, features = input$dotplot.1.feature.select, group.by = group.by)
+    if(is.null(p)) return(NULL)
+    if(identical(class(p),"shiny.tag")) return(NULL)
+    
+    p <- p + guides(color = guide_colourbar(order = 1, title = "Average Expression"), size = guide_legend(order = 2, title = "Percent Expressed")) + theme_few()
+    
+    return(p)
+  })
   
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
   
-  ######### Select input for reduction ##########
-
-  # output$reduction.1 <- renderUI({
-  #   req(input$assay.1)
-  #   assay <- input$assay.1
-  #   id <- 'reduction.1'
-  #   options <- c("pca", "tsne", "umap", "diff")
-  #   l.assay <- tolower(assay)
-  #   options <- paste(c("pca", "tsne", "umap", "diff"), l.assay,sep = "_")
-  #   reductions <- unique(sub("_.$","",names(data[[assay]]$col.attrs)[grepl(paste(options,collapse="|"),names(data[[assay]]$col.attrs))]))
-  #   print(reductions)
-  #   selectInput(
-  #     inputId = id,
-  #     "Select Reduction",
-  #     choices = as.list(reductions),
-  #     selected = reductions[1]
-  #   )
-  # })
-  # 
-  # ########## Select group.by ###########
-  # output$grouping.1 <- renderUI({
-  #   req(input$assay.1)
-  #   assay <- input$assay.1
-  #   id <- 'grouping.1'
-  #   cell_type_options <- names(data[[]]$col.attrs)[grep('cell_type|cell types|cell type|cell_types',names(data[[assay]]$col.attrs))]
-  #   if(!is.null(cell_type_options_old) & (length(cell_type_options)!=length(cell_type_options_old))){
-  #     sel <- cell_type_options[!cell_type_options%in%cell_type_options_old]
-  #   }else{
-  #     sel <- 'cluster'
-  #   }
-  #   cell_type_options_old <<- cell_type_options
-  #   selectInput(inputId = id, label = 'Choose Annotations', choices = c('cluster', cell_type_options), selected = sel, multiple = FALSE)
-  # })
-
-
-  ########## Select features for dotplot ###########
-  # observe({
-  #   req(input$assay.1)
-  #   assay <- input$assay.1
-  #   id <- 'dotplot.1.feature.select'
-  #   output[[id]] <- renderUI({
-  #     selectInput(inputId = id, label = 'Choose Features for Dot Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1:3], multiple = TRUE)
-  #   })
-  # })
-  
-  ########## Select features for feature plot ###########
-  # observe({
-  #   req(input$grouping.1)
-  #   assay <- input$assay.1
-  #   id <- 'featureplot.1.feature.select'
-  #   output[[id]] <- renderUI({
-  #     selectInput(inputId = id, label = 'Choose a Feature for Feature Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
-  #   })
-  # })
-  
-
   ####################### ANNOTATION TAB ########################
   #                                                             #
   ####################### ANNOTATION TAB ########################
   
-  # tmp_annotations <- NULL
-  # 
-  # observeEvent(input$assay.2,{
-  #   tmp.trigger$depend()
-  #   tmp_annotations <<- rep("unlabled",data[[input$assay.2]]$shape[2])
-  #   names(tmp_annotations) <<- data[[input$assay.2]]$col.attrs$CellID[]
-  # })
-  # 
-  # tmp.trigger <- makeReactiveTrigger()
-  # annot.trigger <- makeReactiveTrigger()
-  # 
+  # Global variables used by this tab
+  tmp_annotations <- NULL
+  meta_options_old <- NULL
+  cells <- NULL
+  
+  # Reactive triggers used by this tab
+  tmp.trigger <- makeReactiveTrigger()
+  annot.trigger <- makeReactiveTrigger()
+  
+  output$assay.2 <- renderUI({selectInput('assay.2', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))})
+
+  output$grouping.2 <- renderUI({
+    annot.trigger$depend()
+    req(input$assay.2)
+    assay <- input$assay.2
+    cols <- names(data[[assay]]$col.attrs)
+    meta_options <- cols[grep('_meta_data$',cols)]
+    if(!is.null(meta_options_old) & (length(meta_options)!=length(meta_options_old))){
+      sel <- sub("_meta_data$", "", meta_options[!meta_options%in%meta_options_old])
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",meta_options), fixed = TRUE))){
+      sel <- paste0(tolower(assay),"_clusters")
+    }else{
+      sel <- sub("_meta_data","",meta_options[1])
+    }
+    meta_options_old <<- meta_options
+    
+    selectInput(inputId = 'grouping.2', label = 'Group By', choices = sub("_meta_data$","",meta_options), selected = sel, multiple = FALSE)
+  })
+  
+  output$reduction.2 <- renderUI({
+    req(input$assay.2)
+    assay <- input$assay.2
+    options <- names(data[[assay]]$col.attrs)[grep("_2d",names(data[[assay]]$col.attrs))]
+    l.assay <- tolower(assay)
+    reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options)&grepl(l.assay,options))]))
+    selectInput(inputId = 'reduction.2', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
+  })
+  
+  output$featureplot.2.feature.select<- renderUI({
+    req(input$assay.2)
+    assay <- input$assay.2
+    selectInput(inputId = 'featureplot.2.feature.select', label = 'Select a Feature to Visualize on the Feature Plot (right)', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
+  })
+  
+  output$selected_cells <- renderTable({
+    selected_cells <- as.data.frame(event_data("plotly_selected")$key, stringsAsFactors = FALSE)
+    if (is.null(selected_cells) | ncol(selected_cells) == 0 | nrow(selected_cells) == 0){
+      cells <<- NULL
+      return("Click and drag on either plot to select cells for marker identification (i.e., select/lasso) (double-click to clear selection)")
+    }else if(ncol(selected_cells)>1){
+      selected_cells <- as.data.frame(as.character(selected_cells[1,]),stringsAsFactors = F)
+    }
+    colnames(selected_cells) <- ""
+    cells <<- selected_cells
+    selected_cells
+  })
+  
+  output$dimplot.2 <- renderPlotly({
+    req(input$grouping.2)
+    dimPlotlyOutput(assay.in = input$assay.2, reduc.in = input$reduction.2, group.by = input$grouping.2, data = data)
+  })
+
+  output$featureplot.2 <- renderPlotly({
+    req(input$featureplot.2.feature.select)
+    featurePlotlyOutput(assay.in = input$assay.2, reduc.in = input$reduction.2, group.by = input$grouping.2, feature.in = input$featureplot.2.feature.select, data = data)
+  })
+  
+  observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
+    output$markers <- renderTable({
+      req(input$grouping.2)
+      grouping <- paste0(input$grouping.2,"_meta_data")
+      
+      m <- t(data[[input$assay.2]]$matrix[,])
+      rownames(m) <- data[[input$assay.2]]$row.attrs$features[]
+      colnames(m) <- data[[input$assay.2]]$col.attrs$CellID[]
+      
+      y <- data[[input$assay.2]][[paste0('col_attrs/',grouping)]][]
+      cols <- unlist(lapply(cells[,1], function(x){
+        grep(x,data[[input$assay.2]]$col.attrs$CellID[])
+      }))
+     
+      if(!is.null(cells))
+        y[cols] <- 'Selected'
+     
+      t <- as.data.frame(top_markers(wilcoxauc(X = m, y = y), n = 10))[1:10,]
+      if(!is.null(cells)){
+        t <- as.data.frame(t[,which(colnames(t)=="Selected")],stringsAsFactors=FALSE)
+        names(t) <- "Markers for Selected Cells"
+      }else{
+        t <- t[,mixedsort(colnames(t))]
+        index <- 1:ncol(t)
+        rank <- grep('rank',colnames(t))
+        index <- index[-rank]
+        t <- t[,c(rank, index)]
+      }
+      t
+    }, hover = TRUE, width = '100%',align = 'c')
+  })
+  
   # output$annot.select.cluster <- renderPlotly({
   #   tmp.trigger$depend()
   #   annot.trigger$depend()
