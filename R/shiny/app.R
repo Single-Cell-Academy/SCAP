@@ -1,5 +1,5 @@
 #################### load required packages ###############
-pkgs <- c('shiny','Seurat','ggplot2','ggthemes','BiocManager','plotly','cowplot', 'dplyr','devtools','shinyjqui','shinythemes','gtools')
+pkgs <- c('shiny','Seurat','ggplot2','ggthemes','BiocManager','plotly','cowplot', 'dplyr','devtools','shinyjqui','shinythemes','gtools','pryr','shinyFiles')
 lapply(X = pkgs, FUN = function(x){
   if(!require(x, character.only = TRUE))
     install.packages(x, repos = 'https://cloud.r-project.org/')
@@ -33,23 +33,28 @@ ui <- navbarPage(
   tabPanel(
     "Main",
     sidebarPanel(
-      "",
-      uiOutput('assay.1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
-      uiOutput('reduction.1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
-      uiOutput('grouping.1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
-      uiOutput('featureplot.1.feature.select') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
-      uiOutput('dotplot.1.feature.select') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
+      fluidRow(
+        h3(textOutput('data_used')),
+        shinyDirButton("directory", "Select Dataset", "Please select a Dataset")
+      ),
+      fluidRow(
+        uiOutput('assay_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
+        uiOutput('reduction_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
+        uiOutput('grouping_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
+        uiOutput('featureplot_1_feature.select') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px'),
+        uiOutput('dotplot_1_feature_select') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
+      )
     ),
     mainPanel(
       "",
       fluidRow(style='padding:100px;',
                column(
                  width = 6,
-                 plotlyOutput('dimplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
+                 plotlyOutput('dimplot_1', height = '100%', width = '100%')%>% withSpinner(color="black")
                ),
                column(
                  width = 6,
-                 plotlyOutput('featureplot.1', height = '100%', width = '100%')%>% withSpinner(color="black")
+                 plotlyOutput('featureplot_1', height = '100%', width = '100%')%>% withSpinner(color="black")
                ),
                div(style = "height:10px;")
       ),
@@ -57,7 +62,7 @@ ui <- navbarPage(
         column(
           width = 12,
           offset = 0,
-          plotOutput('dotplot.1', height = '500px', width = '100%')%>% withSpinner(color="black")
+          plotOutput('dotplot_1', height = '500px', width = '100%')%>% withSpinner(color="black")
         )
       )
     )
@@ -65,13 +70,13 @@ ui <- navbarPage(
   tabPanel(
     "Cell Annotation",
     sidebarPanel(
-      uiOutput('assay.2'),
+      uiOutput('assay_2'),
       tabsetPanel(
         id = 'annot_panel',
         tabPanel(
           value = 'cluster',
           "Annotate Clusters",
-          uiOutput('grouping.2'),
+          uiOutput('grouping_2'),
           #uiOutput('annots'),
           textInput('new_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
           actionButton("setCellsTypes", "Rename Clusters/Cells")
@@ -85,41 +90,22 @@ ui <- navbarPage(
           actionButton("save_custom_scheme", "Save Custom Annotations")
         )
       ),
-      uiOutput('reduction.2'),
-      uiOutput('featureplot.2.feature.select'),
-    #   tabsetPanel(
-    #     id = 'annot_panel',
-    #     tabPanel(
-    #       value = 'cluster',
-    #       "Annotate Clusters",
-    #       uiOutput('group.by.2'),
-    #       uiOutput('annots'),
-    #       textInput('new_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
-    #       actionButton("setCellsTypes", "Rename Clusters/Cells")
-    #     ),
-    #     tabPanel(
-    #       value = 'custom',
-    #       "Custom Annotations",
-    #       textInput('custom_name','Name Selected Cluster', placeholder = "Enter cluster name here..."),
-    #       actionButton("add_to_tmp", "Add Annotation"),
-    #       textInput('custom_scheme','Name Custom Scheme', placeholder = "Enter scheme name here..."),
-    #       actionButton("save_custom_scheme", "Save Custom Annotations")
-    #     )
-    #   ),
-    h4("Selected Cells"),
-    tableOutput('selected_cells'),
-    tags$head(tags$style("#cells{overflow-y:scroll; max-height: 200px; background: ghostwhite;}"))
+      uiOutput('reduction_2'),
+      uiOutput('featureplot_2_feature_select'),
+      h4("Selected Cells"),
+      tableOutput('selected_cells'),
+      tags$head(tags$style("#cells{overflow-y:scroll; max-height: 200px; background: ghostwhite;}"))
     ),
     mainPanel(
       fluidRow(
         style='padding:100px;',
         column(
           width = 6,
-          plotlyOutput('dimplot.2', height = '100%', width = '100%')%>% withSpinner(color="black")
+          plotlyOutput('dimplot_2', height = '100%', width = '100%')%>% withSpinner(color="black")
         ),
         column(
           width = 6,
-          plotlyOutput('featureplot.2', height = '100%', width = '100%')%>% withSpinner(color="black")
+          plotlyOutput('featureplot_2', height = '100%', width = '100%')%>% withSpinner(color="black")
         )
       ),
       fluidRow(
@@ -131,7 +117,8 @@ ui <- navbarPage(
         tableOutput('markers') %>% withSpinner(color="black")
       )
     )
-  )#,
+  )
+  #,
   # tabPanel(
   #   "Create Custom Meta Data Groupings",
   #   sidebarPanel(
@@ -156,21 +143,40 @@ ui <- navbarPage(
 #_________________________________________________________#
 
 server <- function(input, output, session){
-
+  
   ###### set working dir and source required functions #####
   options(shiny.maxRequestSize=500*1024^2)
   setwd("/Users/jsjoyal/Desktop/SCAP/")
+  volumes <- c(data = './test_data/')
   source("./R/SCAP_functions.R")
-  
-  ###### import data ######
-  files <- list.files("./test_data/test_project_4/")
-  assays <- assays <- sub(".loom","",files)
-  data <- list()
-  for(i in 1:length(assays)){
-    data[[i]] <- connect(paste0("./test_data/test_project_4/",files[i]), mode = "r+")
-  }
-  names(data) <- assays
 
+  ###### import data ######
+  output$data_used <- renderText({
+    if(!is.null(input$assay_1) & !is.na(input$directory[[1]][2])){
+      return(paste0("Chosen data: ", input$directory[[1]][2]))
+    }else{
+      return(paste0("Please select your data..."))
+    }
+  })
+  
+  shinyDirChoose(input, "directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
+  
+  data <- NULL
+  data_update <- reactive({
+    req(input$directory)
+    path <- parseDirPath(volumes, input$directory)
+    if(identical(path, character(0))) return(NULL)
+    loom_files <- paste0(path,"/",list.files(path))
+    assays <- sub(".loom","",sub(paste0(".*/"),"",loom_files))
+    data <<- list()
+    for(i in 1:length(assays)){
+      data[[i]] <<- connect(loom_files[i], mode = "r+")
+    }
+    if(is.null(data)) return(NULL)
+    names(data) <<- assays
+    return(sample(1:10^9,1))
+  })
+  
   ####################### MAIN TAB ########################
   #                                                       #
   ####################### MAIN TAB ########################
@@ -178,64 +184,83 @@ server <- function(input, output, session){
   # Golbal variables used by this tab
   grouping_options_old <- NULL
   
-  ########## Select Input for Assay ##############
-  output$assay.1 <- renderUI({selectInput('assay.1', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))})
+  #data_trigger <- makeReactiveTrigger()
   
-  output$grouping.1 <- renderUI({
-    req(input$assay.1)
-    assay <- input$assay.1
+  ########## Select Input for Assay ##############
+  output$assay_1 <- renderUI({
+    req(data_update())
+    if(is.null(data)){
+      return(NULL)
+    }
+    selectInput('assay_1', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))
+  })
+  
+  output$grouping_1 <- renderUI({
+    req(data_update())
+    req(input$assay_1)
+    #data_trigger$depend()
+    assay <- input$assay_1
     cols <- names(data[[assay]]$col.attrs)
     grouping_options <- cols[grep('_meta_data$',cols)]
-    if(!is.null(grouping_options_old) & (length(grouping_options)!= length(grouping_options_old))){
-      sel <- sub("_meta_data$", "", grouping_options[!grouping_options%in%grouping_options_old])
-    }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
-        sel <- paste0(tolower(assay),"_clusters")
+    #if(!is.null(grouping_options_old) & (length(grouping_options)!= length(grouping_options_old))){
+    #sel <- sub("_meta_data$", "", grouping_options[!grouping_options%in%grouping_options_old])
+    if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
+      sel <- paste0(tolower(assay),"_clusters")
     }else{
       sel <- sub("_meta_data","",grouping_options[1])
     }
     grouping_options_old <<- grouping_options
     
-    selectInput(inputId = 'grouping.1', label = 'Group By', choices = sub("_meta_data$","",grouping_options), selected = sel, multiple = FALSE)
+    selectInput(inputId = 'grouping_1', label = 'Group By', choices = sub("_meta_data$","",grouping_options), selected = sel, multiple = FALSE)
   })
   
-  output$reduction.1 <- renderUI({
-    req(input$assay.1)
-    assay <- input$assay.1
+  output$reduction_1 <- renderUI({
+    req(data_update())
+    req(input$assay_1)
+    #data_trigger$depend()
+    assay <- input$assay_1
     options <- names(data[[assay]]$col.attrs)
     l.assay <- tolower(assay)
     reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options)&grepl(l.assay,options))]))
-    selectInput(inputId = 'reduction.1', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
+    selectInput(inputId = 'reduction_1', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
   })
   
-  output$featureplot.1.feature.select<- renderUI({
-    req(input$assay.1)
-    assay <- input$assay.1
-    selectInput(inputId = 'featureplot.1.feature.select', label = 'Select a Feature to Visualize on the Feature Plot (right)', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
+  output$featureplot_1_feature.select<- renderUI({
+    req(data_update())
+    req(input$assay_1)
+    #data_trigger$depend()
+    assay <- input$assay_1
+    selectInput(inputId = 'featureplot_1_feature.select', label = 'Select a Feature to Visualize on the Feature Plot (right)', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
   })
-  output$dotplot.1.feature.select<- renderUI({
-    req(input$assay.1)
-    assay <- input$assay.1
-    selectInput(inputId = 'dotplot.1.feature.select', label = 'Choose Features to Visualize on Dot Plot (bottom)', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][3], multiple = TRUE)
+  output$dotplot_1_feature_select<- renderUI({
+    req(data_update())
+    req(input$assay_1)
+    #data_trigger$depend()
+    assay <- input$assay_1
+    selectInput(inputId = 'dotplot_1_feature_select', label = 'Choose Features to Visualize on Dot Plot (bottom)', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][3], multiple = TRUE)
   })
   
   ############### Dim Plot ################
-  output$dimplot.1 <- renderPlotly({
-    req(input$grouping.1)
-    dimPlotlyOutput(assay.in = input$assay.1, reduc.in = input$reduction.1, group.by = input$grouping.1, data = data)
+  output$dimplot_1 <- renderPlotly({
+    req(data_update())
+    req(input$grouping_1)
+    dimPlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, data = data)
   })
-
+  
   ########## Feature Plot #####################
-  output$featureplot.1 <- renderPlotly({
-    req(input$featureplot.1.feature.select)
-    featurePlotlyOutput(assay.in = input$assay.1, reduc.in = input$reduction.1, group.by = input$grouping.1, feature.in = input$featureplot.1.feature.select, data = data)
+  output$featureplot_1 <- renderPlotly({
+    req(data_update())
+    req(input$featureplot_1_feature.select)
+    featurePlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, feature.in = input$featureplot_1_feature.select, data = data)
   })
-   
+  
   ######### Dot Plot #########
-  output$dotplot.1 <- renderPlot({
-    req(input$dotplot.1.feature.select)
+  output$dotplot_1 <- renderPlot({
+    req(data_update())
+    req(input$dotplot_1_feature_select)
     
-    group.by <- input$grouping.1
-    assay <- input$assay.1
+    group.by <- input$grouping_1
+    assay <- input$assay_1
     
     ax.x <- list(
       title = "Features",
@@ -256,7 +281,7 @@ server <- function(input, output, session){
       mirror=TRUE,
       ticks='outside'
     )
-    p <- dotPlot(data = data[[assay]], assay = assay, features = input$dotplot.1.feature.select, group.by = group.by)
+    p <- dotPlot(data = data[[assay]], assay = assay, features = input$dotplot_1_feature_select, group.by = group.by)
     if(is.null(p)) return(NULL)
     if(identical(class(p),"shiny.tag")) return(NULL)
     
@@ -279,12 +304,18 @@ server <- function(input, output, session){
   tmp.trigger <- makeReactiveTrigger()
   annot.trigger <- makeReactiveTrigger()
   
-  output$assay.2 <- renderUI({selectInput('assay.2', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))})
-
-  output$grouping.2 <- renderUI({
+  output$assay_2 <- renderUI({
+    req(data_update())
+    #data_trigger$depend()
+    selectInput('assay_2', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))
+  })
+  
+  output$grouping_2 <- renderUI({
+    req(data_update())
     annot.trigger$depend()
-    req(input$assay.2)
-    assay <- input$assay.2
+    req(input$assay_2)
+    #data_trigger$depend()
+    assay <- input$assay_2
     cols <- names(data[[assay]]$col.attrs)
     meta_options <- cols[grep('_meta_data$',cols)]
     if(!is.null(meta_options_old) & (length(meta_options)!=length(meta_options_old))){
@@ -296,25 +327,30 @@ server <- function(input, output, session){
     }
     meta_options_old <<- meta_options
     
-    selectInput(inputId = 'grouping.2', label = 'Group By', choices = sub("_meta_data$","",meta_options), selected = sel, multiple = FALSE)
+    selectInput(inputId = 'grouping_2', label = 'Group By', choices = sub("_meta_data$","",meta_options), selected = sel, multiple = FALSE)
   })
   
-  output$reduction.2 <- renderUI({
-    req(input$assay.2)
-    assay <- input$assay.2
+  output$reduction_2 <- renderUI({
+    req(data_update())
+    req(input$assay_2)
+    #data_trigger$depend()
+    assay <- input$assay_2
     options <- names(data[[assay]]$col.attrs)[grep("_2d",names(data[[assay]]$col.attrs))]
     l.assay <- tolower(assay)
     reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options)&grepl(l.assay,options))]))
-    selectInput(inputId = 'reduction.2', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
+    selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
   })
   
-  output$featureplot.2.feature.select<- renderUI({
-    req(input$assay.2)
-    assay <- input$assay.2
-    selectInput(inputId = 'featureplot.2.feature.select', label = 'Select a Feature to Visualize on the Feature Plot (right)', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
+  output$featureplot_2_feature_select<- renderUI({
+    req(data_update())
+    req(input$assay_2)
+    #data_trigger$depend()
+    assay <- input$assay_2
+    selectInput(inputId = 'featureplot_2_feature_select', label = 'Select a Feature to Visualize on the Feature Plot (right)', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][1], multiple = FALSE)
   })
   
   output$selected_cells <- renderTable({
+    req(data_update())
     selected_cells <- as.data.frame(event_data("plotly_selected")$key, stringsAsFactors = FALSE)
     if (is.null(selected_cells) | ncol(selected_cells) == 0 | nrow(selected_cells) == 0){
       cells <<- NULL
@@ -327,33 +363,39 @@ server <- function(input, output, session){
     selected_cells
   })
   
-  output$dimplot.2 <- renderPlotly({
-    req(input$grouping.2)
-    dimPlotlyOutput(assay.in = input$assay.2, reduc.in = input$reduction.2, group.by = input$grouping.2, data = data)
+  output$dimplot_2 <- renderPlotly({
+    req(data_update())
+    req(input$grouping_2)
+    dimPlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, data = data)
   })
-
-  output$featureplot.2 <- renderPlotly({
-    req(input$featureplot.2.feature.select)
-    featurePlotlyOutput(assay.in = input$assay.2, reduc.in = input$reduction.2, group.by = input$grouping.2, feature.in = input$featureplot.2.feature.select, data = data)
+  
+  output$featureplot_2 <- renderPlotly({
+    req(data_update())
+    req(input$featureplot_2_feature_select)
+    featurePlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, feature.in = input$featureplot_2_feature_select, data = data)
   })
   
   observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
     output$markers <- renderTable({
-      req(input$grouping.2)
-      grouping <- paste0(input$grouping.2,"_meta_data")
+      req(input$grouping_2)
+      #data_trigger$depend()
+      grouping <- paste0(input$grouping_2,"_meta_data")
+      if(!any(names(data[[input$assay_2]]$col.attrs) == grouping)){
+        return(NULL)
+      }
       
-      m <- t(data[[input$assay.2]]$matrix[,])
-      rownames(m) <- data[[input$assay.2]]$row.attrs$features[]
-      colnames(m) <- data[[input$assay.2]]$col.attrs$CellID[]
+      m <- t(data[[input$assay_2]]$matrix[,])
+      rownames(m) <- data[[input$assay_2]]$row.attrs$features[]
+      colnames(m) <- data[[input$assay_2]]$col.attrs$CellID[]
       
-      y <- data[[input$assay.2]][[paste0('col_attrs/',grouping)]][]
+      y <- data[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
       cols <- unlist(lapply(cells[,1], function(x){
-        grep(x,data[[input$assay.2]]$col.attrs$CellID[])
+        grep(x,data[[input$assay_2]]$col.attrs$CellID[])
       }))
-     
+      
       if(!is.null(cells))
         y[cols] <- 'Selected'
-     
+      
       t <- as.data.frame(top_markers(wilcoxauc(X = m, y = y), n = 10))[1:10,]
       if(!is.null(cells)){
         t <- as.data.frame(t[,which(colnames(t)=="Selected")],stringsAsFactors=FALSE)
@@ -369,20 +411,24 @@ server <- function(input, output, session){
     }, hover = TRUE, width = '100%',align = 'c')
   })
   
+  
+  
+  #---------------------------------------------------#
+  
   # output$annot.select.cluster <- renderPlotly({
   #   tmp.trigger$depend()
   #   annot.trigger$depend()
   #   req(input$reduc.2)
   #   req(input$group.by.2)
-  #   req(input$assay.2)
+  #   req(input$assay_2)
   #   
   #   reduc <- tolower(paste0(input$reduc.2,"_rna_2d_",1:2))
   #   
   #   if(input$group.by.2 == "cluster"){
-  #     plot.data <- data[[input$assay.2]]$get.attribute.df(attributes=c(reduc,tolower(paste0(input$assay.2,"_","clusters")),'percent.mt'))
+  #     plot.data <- data[[input$assay_2]]$get.attribute.df(attributes=c(reduc,tolower(paste0(input$assay_2,"_","clusters")),'percent.mt'))
   #   }
   #   else{
-  #     plot.data <- data[[input$assay.2]]$get.attribute.df(attributes=c(reduc,input$group.by.2,'percent.mt'))
+  #     plot.data <- data[[input$assay_2]]$get.attribute.df(attributes=c(reduc,input$group.by.2,'percent.mt'))
   #   }
   #   key <- reduc_key(key = toupper(input$reduc.2))
   #   
@@ -429,7 +475,7 @@ server <- function(input, output, session){
   #                  "</br>",key,"_2: ", format(plot.data[,2],digits=3), "\n",
   #                  "</br>percent.mt: ", format(plot.data[,4],digits=3), "%"), 
   #                hovertemplate = paste0('<b>%{text}</b>')
-  #   ) %>% layout(title = ifelse(test = input$annot_panel == 'cluster', yes = paste0(input$assay.2, " data coloured by ", input$group.by.2), no = paste0(input$assay.2, " data")),xaxis = ax.x, yaxis = ax.y, dragmode = "select")
+  #   ) %>% layout(title = ifelse(test = input$annot_panel == 'cluster', yes = paste0(input$assay_2, " data coloured by ", input$group.by.2), no = paste0(input$assay_2, " data")),xaxis = ax.x, yaxis = ax.y, dragmode = "select")
   # 
   #   p
   # })
@@ -438,21 +484,21 @@ server <- function(input, output, session){
   #   annot.trigger$depend()
   #   req(input$feature.select3)
   #   req(input$reduc.2)
-  #   req(input$assay.2)
-  #   data.features <- as.data.frame(data[[input$assay.2]][['matrix']][,which(data[[input$assay.2]]$row.attrs$features[]%in%input$feature.select3)])
+  #   req(input$assay_2)
+  #   data.features <- as.data.frame(data[[input$assay_2]][['matrix']][,which(data[[input$assay_2]]$row.attrs$features[]%in%input$feature.select3)])
   #   if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
   #   if(input$group.by.2 == 'cluster'){
-  #     data.annot <- data[[input$assay.2]]$get.attribute.df(attributes=tolower(paste0(input$assay.2,"_clusters")))
+  #     data.annot <- data[[input$assay_2]]$get.attribute.df(attributes=tolower(paste0(input$assay_2,"_clusters")))
   #   }else{
-  #     data.annot <- data[[input$assay.2]]$get.attribute.df(attributes=input$group.by.2)
+  #     data.annot <- data[[input$assay_2]]$get.attribute.df(attributes=input$group.by.2)
   #   }
-  #   rownames(data.features) <- data[[input$assay.2]]$col.attrs$CellID[]
+  #   rownames(data.features) <- data[[input$assay_2]]$col.attrs$CellID[]
   #   colnames(data.features) <- input$feature.select3
   # 
   #   
-  #   dims <- tolower(paste0(input$reduc.2,"_",input$assay.2,"_2d_",1:2))
+  #   dims <- tolower(paste0(input$reduc.2,"_",input$assay_2,"_2d_",1:2))
   # 
-  #   plot.data <- data[[input$assay.2]]$get.attribute.df(attributes=dims)
+  #   plot.data <- data[[input$assay_2]]$get.attribute.df(attributes=dims)
   #   plot.data <- cbind(plot.data,data.annot)
   #   plot.data <- cbind(plot.data,data.features)
   # 
@@ -519,19 +565,19 @@ server <- function(input, output, session){
   # 
   # observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
   #   output$markers <- renderTable({
-  #     req(input$assay.2)
+  #     req(input$assay_2)
   #     req(input$group.by.2)
   #     #if(is.null(input$find.markers)) NULL
-  #     m <- t(data[[input$assay.2]]$matrix[,])
-  #     rownames(m) <- data[[input$assay.2]]$row.attrs$features[]
-  #     colnames(m) <- data[[input$assay.2]]$col.attrs$CellID[]
+  #     m <- t(data[[input$assay_2]]$matrix[,])
+  #     rownames(m) <- data[[input$assay_2]]$row.attrs$features[]
+  #     colnames(m) <- data[[input$assay_2]]$col.attrs$CellID[]
   #     if(input$group.by.2=='cluster'){
-  #       y <- data[[input$assay.2]][[paste0("col_attrs/",tolower(input$assay.2),"_clusters")]][]
+  #       y <- data[[input$assay_2]][[paste0("col_attrs/",tolower(input$assay_2),"_clusters")]][]
   #     }else{
-  #       y <- data[[input$assay.2]][[paste0('col_attrs/',input$group.by.2)]][]
+  #       y <- data[[input$assay_2]][[paste0('col_attrs/',input$group.by.2)]][]
   #     }
   #     cols <- unlist(lapply(cells[,1], function(x){
-  #       grep(x,data[[input$assay.2]]$col.attrs$CellID[])
+  #       grep(x,data[[input$assay_2]]$col.attrs$CellID[])
   #     }))
   #     #print(cells)
   #     #print(cols)
@@ -552,20 +598,20 @@ server <- function(input, output, session){
   # })
   # 
   # observeEvent(input$setCellsTypes, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-  #   req(input$assay.2)
+  #   req(input$assay_2)
   #   req(input$group.by.2)
   #   if(is.null(input$new_name) || input$new_name == "" || input$new_name == " "){
   #     showNotification("Please name the annotation scheme", type = 'warning')
   #   }else{
   #     if(input$group.by.2 == "cluster"){
-  #       names <- data[[input$assay.2]][[paste0("col_attrs/",tolower(input$assay.2),"_clusters")]][]
+  #       names <- data[[input$assay_2]][[paste0("col_attrs/",tolower(input$assay_2),"_clusters")]][]
   #       new <- names
   #       names <- as.numeric(unique(names))
   #       for(i in 1:length(names)){
   #         new[which(new == names[i])] <- input[[paste0("cluster_",names[i])]]
   #       }
   #     }else{
-  #       names <- data[[input$assay.2]][[paste0('col_attrs/',input$group.by.2)]][]
+  #       names <- data[[input$assay_2]][[paste0('col_attrs/',input$group.by.2)]][]
   #       new <- names
   #       names <- unique(names)
   #       for(i in 1:length(names)){
@@ -576,7 +622,7 @@ server <- function(input, output, session){
   #     names(new) <- input$new_name
   #     if(!grepl("cell_type$",names(new))) names(new) <- paste0(names(new),"_cell_type")
   #     
-  #     data[[input$assay.2]]$add.col.attribute(attributes = new, overwrite = TRUE)
+  #     data[[input$assay_2]]$add.col.attribute(attributes = new, overwrite = TRUE)
   #     annot.trigger$trigger()
   #   }
   # })
@@ -603,20 +649,20 @@ server <- function(input, output, session){
   #     new <- list(tmp_annotations)
   #     names(new) <- input$custom_scheme
   #     if(!grepl("cell_type$",names(new))) names(new) <- paste0(names(new),"_cell_type")
-  #     data[[input$assay.2]]$add.col.attribute(attributes = new, overwrite = TRUE)
-  #     tmp_annotations <<- rep("unlabled",data[[input$assay.2]]$shape[2])
+  #     data[[input$assay_2]]$add.col.attribute(attributes = new, overwrite = TRUE)
+  #     tmp_annotations <<- rep("unlabled",data[[input$assay_2]]$shape[2])
   #     annot.trigger$trigger()
   #   }
   # })
   # 
-  # output$assay.2 <- renderUI({
-  #   selectInput('assay.2', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))
+  # output$assay_2 <- renderUI({
+  #   selectInput('assay_2', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))
   # })
   # 
   # output$reduc.2 <- renderUI({
-  #   req(input$assay.2)
+  #   req(input$assay_2)
   #   options <- c("tsne_rna_2d", "umap_rna_2d")
-  #   meta.names <- data[[input$assay.2]][['col_attrs']]$names
+  #   meta.names <- data[[input$assay_2]][['col_attrs']]$names
   #   meta.names <- meta.names[sub("_.$","",meta.names)%in%options]
   #   meta.names <- unique(toupper(sub("_.*","",meta.names)))
   #   names(meta.names) <- meta.names
@@ -631,15 +677,15 @@ server <- function(input, output, session){
   # cell_type_options_old <- NULL
   # output$group.by.2 <- renderUI({
   #   annot.trigger$depend()
-  #   req(input$assay.2)
+  #   req(input$assay_2)
   #   
-  #   cell_type_options <- names(data[[input$assay.2]]$col.attrs)[grep('cell_type|cell types|cell type|cell_types',names(data[[input$assay.2]]$col.attrs))]
+  #   cell_type_options <- names(data[[input$assay_2]]$col.attrs)[grep('cell_type|cell types|cell type|cell_types',names(data[[input$assay_2]]$col.attrs))]
   #   if(!is.null(cell_type_options_old) & (length(cell_type_options)!=length(cell_type_options_old))){
   #     sel <- cell_type_options[!cell_type_options%in%cell_type_options_old]
   #   }else{
   #     sel <- 'cluster'
   #   }
-  #   cell_type_options_old <<- names(data[[input$assay.2]]$col.attrs)[grep('cell_type|cell types|cell type|cell_types',names(data[[input$assay.2]]$col.attrs))]
+  #   cell_type_options_old <<- names(data[[input$assay_2]]$col.attrs)[grep('cell_type|cell types|cell type|cell_types',names(data[[input$assay_2]]$col.attrs))]
   #   selectInput(inputId = 'group.by.2', label = 'Choose Annotations', choices = c('cluster', cell_type_options), selected = sel, multiple = FALSE)
   # })
   # 
@@ -648,14 +694,14 @@ server <- function(input, output, session){
   #   req(input$group.by.2)
   # 
   #   if(input$group.by.2 == "cluster"){
-  #     names <- as.numeric(unique(data[[input$assay.2]][[paste0("col_attrs/",tolower(input$assay.2),"_clusters")]][]))
+  #     names <- as.numeric(unique(data[[input$assay_2]][[paste0("col_attrs/",tolower(input$assay_2),"_clusters")]][]))
   #     names <- names[order(names)]
   #     id <- "cluster"
   #     lapply(1:length(names), function(x){
   #       textInput(inputId = paste0(id,"_",names[x]), label = paste0(id," ",names[x]), value = paste0(id," ",names[x]))
   #     })
   #   }else{
-  #     names <- unique(data[[input$assay.2]][[paste0('col_attrs/',input$group.by.2)]][])
+  #     names <- unique(data[[input$assay_2]][[paste0('col_attrs/',input$group.by.2)]][])
   #     id <- "cells"
   #     lapply(1:length(names), function(x){
   #       if(!grepl("cells$",names[x])){
@@ -668,8 +714,8 @@ server <- function(input, output, session){
   # })
   # 
   # output$feature.select3 <- renderUI({
-  #   req(input$assay.2)
-  #   selectInput(inputId = 'feature.select3', label = 'Choose a Feature for Feature Plot', choices = data[[input$assay.2]][['row_attrs/features']][], selected = data[[input$assay.2]][['row_attrs/features']][1], multiple = FALSE)
+  #   req(input$assay_2)
+  #   selectInput(inputId = 'feature.select3', label = 'Choose a Feature for Feature Plot', choices = data[[input$assay_2]][['row_attrs/features']][], selected = data[[input$assay_2]][['row_attrs/features']][1], multiple = FALSE)
   # })
   # 
   # meta.trigger <- makeReactiveTrigger()

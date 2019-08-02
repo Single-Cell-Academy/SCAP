@@ -1,7 +1,8 @@
 # process seurat to loom
 library(loomR)
 library(hdf5r)
-seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/integrated.attempt.9.rds")
+library(Seurat)
+seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/pbmc_downsample.rds")
 
 assays <- names(seur@assays)
 
@@ -11,11 +12,9 @@ if(any(assays == 'integrated')){
 }else if(any(assays=='SCT')){
     assays <- assays[-grep('integrated|RNA',assays)]
     flag <- TRUE
-}else{
-  assays <- assays[-grep('integrated|SCT',assays)]
 }
 
-project_dir <- "/Users/jsjoyal/Desktop/SCAP/test_data/test_project_4/"
+project_dir <- "/Users/jsjoyal/Desktop/SCAP/test_data/mini_project/"
 
 for(assay in assays){
   DefaultAssay(seur) <- assay

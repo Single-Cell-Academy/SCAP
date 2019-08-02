@@ -72,13 +72,16 @@ dotPlot <- function(
   scale.max = NA,
   ...
 ) {
+  group.by <- paste0(group.by,'_meta_data')
+  if(!any(names(data$col.attrs) == group.by)){
+    return(NULL)
+  }
   scale.func <- switch(
     EXPR = scale.by,
     'size' = scale_size,
     'radius' = scale_radius,
     stop("'scale.by' must be either 'size' or 'radius'")
   )
-  group.by <- paste0(group.by,'_meta_data')
   if(!any(names(data$col.attrs) == group.by) | !any(features%in%data$row.attrs$features[])){
     return(NULL)
   }
@@ -238,7 +241,7 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, data){
   if(!any(col.attrs == group.by)){
     return(NULL)
   }
-  
+  print('1')
   reduc <- col.attrs[grepl(reduc.in,col.attrs)]
   n <- length(reduc)
   
@@ -248,6 +251,7 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, data){
 
   plot.data <- data[[assay.in]]$get.attribute.df(attributes=c(reduc,group.by,'percent.mito_meta_data'))
   
+  print('2')
   #print(head(plot.data))
   
   ann <- 50
@@ -316,6 +320,7 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, data){
                  hovertemplate = paste0('<b>%{text}</b><extra></extra>')
     ) %>% layout(title = paste0(assay.in, " data coloured by ", sub('_meta_data','',group.by)) ,scene = list(xaxis = ax.x, yaxis = ax.y, zaxis = ax.z),legend = list(x = 100, y = 0.5))
   }
+  print('3')
   return(p)
 }
 
