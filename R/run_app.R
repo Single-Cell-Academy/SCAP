@@ -22,3 +22,4 @@ library(loomR)
 
 # run app 
 runApp(appDir = '/Users/jsjoyal/Desktop/SCAP/R/shiny/')
+
