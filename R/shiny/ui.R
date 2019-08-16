@@ -76,8 +76,27 @@ ui <- navbarPage(
           offset = 0,
           wellPanel(
             style  = 'background: white;',
-            plotOutput('dotplot_1', height = '500px', width = '100%')%>% withSpinner(color="black"),
-            uiOutput('dotplot_1_feature_select', style = 'padding: 10px')
+            fluidRow(
+             uiOutput('dotplot_1')
+            ),
+            fluidRow(
+              column(
+                width = 4,
+                uiOutput('dotplot_1_feature_select', style = 'padding: 10px')
+              ),
+              column(
+                width = 4,
+                uiOutput('do_split')
+              ),
+              column(
+                width = 4,
+                conditionalPanel(
+                  condition = "input.do_split=='yes'",
+                  uiOutput('split_by'),
+                  tags$head(tags$style("#split_by{overflow-y:scroll; max-height: 200px; background: white;}"))
+                )
+              )
+            )
           )
         )
       )
@@ -118,8 +137,6 @@ ui <- navbarPage(
         ),
         textInput('new_scheme_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
         actionButton("set_cell_types", "Rename Clusters/Cells"),
-        #uiOutput('reduction_2'),
-        #uiOutput('featureplot_2_feature_select'),
         h4("Selected Cells"),
         tableOutput('selected_cells'),
         tags$head(tags$style("#selected_cells{overflow-y:scroll; max-height: 200px; background: white;}"))
@@ -128,31 +145,7 @@ ui <- navbarPage(
         fluidRow(
           column(
             width = 12,
-            tags$head(
-              tags$style(
-                HTML(
-                  "#low_res2-table {border-collapse: collapse;}
-                   #low_res2-table td {padding: 10px;vertical-align: bottom;}"
-                ) #/ HTML
-              ) #/ style
-            ), #/ head
-            tags$table(
-              id = 'low_res2-table',
-              style = "width: 30%",
-              tags$tr(
-                tags$td(
-                  style = 'width: 60%',
-                  h4('Lower plot resolution to increase selection speed?')
-                ),
-                tags$td(
-                  style = 'width: 40%; text-align: rigth;',
-                  div(
-                    class = 'from-group shiny-input-container',
-                    radioButtons('low_res_2', label = "", choices = c('yes','no'), selected = 'no', inline = T)
-                  )
-                )
-              )
-            )
+            radioButtons('low_res_2', label = "Lower plot resolution to increase cell selection speed", choices = c('yes','no'), selected = 'no', inline = T)
           )
         ),
         fluidRow(
@@ -204,7 +197,7 @@ ui <- navbarPage(
       )
     )
   )
-)
+)# end ui
 #jqui_resizable(jqui_draggable(
 #%>% withSpinner(color="#0dc5c1")
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++#

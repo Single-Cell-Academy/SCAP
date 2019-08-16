@@ -2,7 +2,7 @@
 library(loomR)
 library(hdf5r)
 library(Seurat)
-seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/pbmc_downsample.rds")
+seur <- readRDS("/Users/jsjoyal/Desktop/SCAP/test_data/seurat_stim_vs_contol/seurat_obj.rds")
 
 assays <- names(seur@assays)
 
@@ -14,7 +14,7 @@ if(any(assays == 'integrated')){
     flag <- TRUE
 }
 
-project_dir <- "/Users/jsjoyal/Desktop/SCAP/test_data/mini_project/"
+project_dir <- "/Users/jsjoyal/Desktop/SCAP/test_data/seurat_project/"
 
 for(assay in assays){
   DefaultAssay(seur) <- assay

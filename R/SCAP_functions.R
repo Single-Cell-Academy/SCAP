@@ -60,7 +60,7 @@ dotPlot <- function(
   data,
   assay = NULL,
   features,
-  cols = c("deepskyblue4", "orangered"),
+  cols = c("blue", "red"),
   col.min = -2.5,
   col.max = 2.5,
   dot.min = 0,
@@ -85,11 +85,11 @@ dotPlot <- function(
   if(!any(names(data$col.attrs) == group.by) | !any(features%in%data$row.attrs$features[])){
     return(NULL)
   }
-  data.features <- as.data.frame(data[['matrix']][,which(data$row.attrs$features[]%in%features)])
+  index <- unlist(lapply(features,grep,x=data$row.attrs$features[],fixed=T))
+  data.features <- as.data.frame(data[['matrix']][,index])
   if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
   rownames(data.features) <- data$col.attrs$CellID[]
-  colnames(data.features)[1:length(features)] <- features
-  
+  colnames(data.features) <- features
   id <- data[[paste0("col_attrs/",group.by)]][drop=TRUE]
   if(length(unique(id))>50){
     showNotification(paste0('Notice: The dot plot will not load because the chosen grouping contains over 50 (',length(unique(id)),') unique groups.'), type = 'message')
@@ -429,7 +429,10 @@ split_dot_plot <- function(data,
                            scale.max = NA,
                            scale.min = NA){
   
-  data.features <- as.data.frame(data[['matrix']][,which(data$row.attrs$features[]%in%features)])
+  group.by <- paste0(group.by,'_meta_data')
+  split.by <- paste0(split.by,'_meta_data')
+  index <- unlist(lapply(features,grep,x=data$row.attrs$features[],fixed=T))
+  data.features <- as.data.frame(data[['matrix']][,index])
   if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
   rownames(data.features) <- data$col.attrs$CellID[]
   colnames(data.features)[1:length(features)] <- features
@@ -515,37 +518,37 @@ split_dot_plot <- function(data,
   data.plot$split <- as.factor(data.plot$split)
   
   data.plot$id <- reorder_levels(data.plot$id)
-  
-  labels <- data.plot[,c(3,6)]
-  labels$id <- rep(levels(data.plot$id)[length(levels(data.plot$id))], nrow(labels))
+  #print('data.plot')
+  #print(str(data.plot))
   
   labels <- data.frame(features.plot = rep(levels(data.plot$features.plot),length(levels(data.plot$split))))
   labels$id <- rep(levels(data.plot$id)[length(levels(data.plot$id))], nrow(labels))
+  labels <- labels[order(labels$features.plot),]
   labels$split <- rep(levels(data.plot$split),nrow(labels)/length(levels(data.plot$split)))
-  
-  
-  lines <- data.frame(features.plot = levels(data.plot$features.plot), 
-                      id = rep(levels(data.plot$id)[length(levels(data.plot$id))],length(levels(data.plot$features.plot))), 
-                      lines = rep(paste(rep('______',length(levels(data.plot$split))),collapse = ""), length(levels(data.plot$features.plot))))
   
   labels$features.plot <- as.factor(labels$features.plot)
   labels$id <- as.factor(labels$id)
   labels$split <- as.factor(labels$split)
-  
-  
+  labels$y <- as.factor('ZZZZZZ') #length(levels(data.plot$id))+1
+  #print('labels:')
+  #print(labels)
   
   p <- ggplot(data = data.plot, mapping = aes(x = features.plot, y = id)) + 
     geom_point(aes(color = avg.exp.scaled, size = pct.exp, group = split), position = position_dodge(1))  +
-    geom_text(data = labels, aes(x = features.plot, y = id, label = split, group = split), position = position_dodge(width = 1), size=5, vjust = -3) + 
-    scale_y_discrete(limits = c(levels(data.plot$id),"","","")) +
+    geom_text(data = labels, aes(x = features.plot, y = y, label = split, group = split), position = position_dodge(width = 1), size=5) + 
+    scale_y_discrete(breaks = as.factor(levels(data.plot$id))) +
     scale_color_gradient(low = 'blue', high = 'red') + 
     xlab('Features') +
     ylab('Identity') +
     theme_base()
   
+  #print('layer_1:')
+  #print(layer_data(p,1))
   layer <- layer_data(p,2)
   layer <- layer[order(layer$x),]
-  layer$y <- layer$y+1
+  layer$y <- layer$y-0.5
+  #print('layer:')
+  #print(layer)
   n_groups <- length(unique(layer$group))
   start <- 1
   for(i in 1:nrow(layer)){
@@ -563,14 +566,17 @@ split_dot_plot <- function(data,
   }
   
   cnt <- 1
+  #print('l_data:')
   while(cnt<1000){
     l_data <- layer[cnt:(cnt+n_groups-1),]
+    #print(l_data)
     p <- p + geom_line(data = l_data, aes(x = x, y = y))
     cnt <- cnt + n_groups
     if(cnt>(length(levels(data.plot$features.plot))*n_groups)){
       break
     }
   }
+  cat('\n\n')
   return(p)
 }
 

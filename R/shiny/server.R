@@ -19,6 +19,9 @@ server <- function(input, output, session){
   
   shinyDirChoose(input, "directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
   
+  
+  update.trigger <- makeReactiveTrigger()
+  
   # connect to .loom files in chosen dir
   data <- NULL
   data_update <- reactive({
@@ -33,6 +36,7 @@ server <- function(input, output, session){
     }
     if(is.null(data)) return(NULL)
     names(data) <<- assays
+    update.trigger$depend()
     return(sample(1:10^9,1))
   })
   
@@ -100,6 +104,25 @@ server <- function(input, output, session){
     selectInput(inputId = 'dotplot_1_feature_select', label = 'Choose Features to Visualize on Dot Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][3], multiple = TRUE)
   })
   
+  output$do_split <- renderUI({
+    req(data_update())
+    req(input$assay_1)
+    radioButtons(inputId = 'do_split', label = 'Split dot plot', choices = c('yes', 'no'), selected = 'no', inline = TRUE)
+  })
+  
+  #-- select how to split the dot plot --#
+  output$split_by <- renderUI({
+    req(data_update())
+    req(input$assay_1)
+    choices <- unlist(lapply(names(data[[input$assay_1]]$col.attrs), function(x){
+      if(length(unique(data[[input$assay_1]]$col.attrs[[x]][]))==2){
+        return(x)
+      }
+    }))
+    choices <- sub("_meta_data$","",choices[grepl('_meta_data$',choices)])
+    radioButtons(inputId = 'split_by', label = 'Choose how to split the data', choices = choices, inline = FALSE)
+  })
+  
   #-- dimensional reduction plot coloured by cell groups --#
   output$dimplot_1 <- renderPlotly({
     req(data_update())
@@ -118,7 +141,7 @@ server <- function(input, output, session){
   })
   
   #-- dot plot for selected feature expression --#
-  output$dotplot_1 <- renderPlot({
+  dot_plot <- reactive({
     req(data_update())
     req(input$dotplot_1_feature_select)
     
@@ -144,17 +167,47 @@ server <- function(input, output, session){
       mirror=TRUE,
       ticks='outside'
     )
-    p <- dotPlot(data = data[[assay]], assay = assay, features = input$dotplot_1_feature_select, group.by = group.by)
-    if(is.null(p)) return(NULL)
-    if(identical(class(p),"shiny.tag")) return(NULL)
     
-    p <- p + guides(color = guide_colourbar(order = 1, title = "Average Expression"), size = guide_legend(order = 2, title = "Percent Expressed")) + theme_few()
-    
-    return(p)
+    if(input$do_split == 'yes' & !is.null(input$split_by)){
+      p <- split_dot_plot(data = data[[assay]], features = input$dotplot_1_feature_select, group.by = group.by, split.by = input$split_by)
+      if(is.null(p)) return(NULL)
+      if(identical(class(p),"shiny.tag")) return(NULL)
+      return(p)
+    }else if(input$do_split == 'no'){
+      p <- dotPlot(data = data[[assay]], assay = assay, features = input$dotplot_1_feature_select, group.by = group.by)
+      if(is.null(p)) return(NULL)
+      if(identical(class(p),"shiny.tag")) return(NULL)
+      
+      p <- p + guides(color = guide_colourbar(order = 1, title = "Average Expression"), size = guide_legend(order = 2, title = "Percent Expressed")) + theme_few()
+      
+      return(p)
+    }else{
+      return(-1)
+    }
   })
+  
+  output$dotplot_1 <- renderUI({
+    req(data_update())
+    req(dot_plot())
+    req(input$dotplot_1_feature_select)
+  
+    if(input$do_split == 'yes' && is.null(input$split_by)){
+      output$choose_splits <- renderText({
+        return('Please choose how to split the data')
+      })
+      return(h2(textOutput('choose_splits')))
+    }else{
+      output$plot <- renderPlot({
+        return(dot_plot())
+      })
+      return(plotOutput('plot'))
+    }
+  })
+  
   
   ###==============// ANNOTATION TAB //==============####
   
+  #-- switch to low resolution plots to improve performance with large datasets --#
   observeEvent(input$low_res_2,{
     resolution.trigger$trigger()
   })
@@ -165,6 +218,7 @@ server <- function(input, output, session){
   cells <- NULL
   
   #-- reactive triggers used by this tab --#
+  
   # triggered when adding custom annotations
   tmp.trigger <- makeReactiveTrigger()
   # triggered when saving custom annotations
@@ -297,6 +351,7 @@ server <- function(input, output, session){
     }, hover = TRUE, width = '100%',align = 'c')
   })
   
+  #-- display selected grouping name --#
   output$annotation_title <- renderText({
     req(data_update())
     annot.trigger$depend()
@@ -383,15 +438,23 @@ server <- function(input, output, session){
   
   ###==============// CUSTOM META DATA TAB //==============####
   
+  #-- reactive triggers used by this tab --#
+  
+  # triggered when meta data is selected/deselected from the checkbox group
   meta.trigger <- makeReactiveTrigger()
 
+  #-- global variables used by this tab --#
+  
+  # orders slected meta data by which order it was selected, rather than alpha-numerically 
   order <- NULL
   
+  #-- select input for Assay --#
   output$assay_3 <- renderUI({
     req(data_update())
     selectInput('assay_3', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))
   })
   
+  #-- select meta data to combine --#
   output$meta_group_checkbox <- renderUI({
     req(data_update())
     req(input$assay_3)
@@ -400,6 +463,7 @@ server <- function(input, output, session){
     checkboxGroupInput(inputId = 'meta_group_checkbox', label = 'Meta Data', choices = choices)
   })
   
+  #-- display the order of the selected meta data --#
   output$example_meta_group_name <- renderText({
     req(data_update())
     meta.trigger$depend()
@@ -409,6 +473,7 @@ server <- function(input, output, session){
     paste(sub('_meta_data$','',order),collapse=" + ")
   })
   
+  #-- display a sample of what the combined meta data will resemble --#
   output$example_meta_group <- renderTable({
     req(data_update())
     req(input$assay_3)
@@ -422,6 +487,7 @@ server <- function(input, output, session){
     return(ex_df)
   }, hover = TRUE, width = '100%',align = 'c')
   
+  #-- update the 'order' global variable whenever the checkbox group is selected/deselected --#
   observeEvent(input$meta_group_checkbox, ignoreNULL = F,{
     req(data_update())
     if(is.null(new)){
@@ -441,4 +507,24 @@ server <- function(input, output, session){
     }
     meta.trigger$trigger()
   })
-}
+  
+  observeEvent(input$add_new_meta_group,{
+    if(is.null(input$meta_group_checkbox) || length(input$meta_group_checkbox)<2){
+      showNotification('At least two meta data groups must be selected!', type = 'error')
+    }else if(is.null(input$new_meta_group) || input$new_meta_group == ''){
+      showNotification('A name for the meta data must be provided!', type = 'error')
+    }else if(paste0(input$new_meta_group,'_meta_data') %in% names(data[[input$assay_3]]$col.attrs)){
+      showNotification('The chosen meta data name already exists! Please select a unique name.', type = 'error')
+    }else{
+      ex <- data[[input$assay_3]]$get.attribute.df(attributes = order)
+      ex_list <- list(apply(X = ex, MARGIN = 1, FUN = paste, collapse = '_'))
+      if(grepl('_meta_data$', input$new_meta_group)==FALSE){
+        names(ex_list) <- paste0(input$new_meta_group,'_meta_data')
+      }else{
+        names(ex_list) <- input$new_meta_group
+      }
+      data[[input$assay_3]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
+      update.trigger$trigger()
+    }
+  })
+} # server end
