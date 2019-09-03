@@ -1,5 +1,172 @@
 #my.pal <- c(RColorBrewer::brewer.pal(12,'Set3'),RColorBrewer::brewer.pal(12,'Paired'))
 
+seuratToLoom <- function(obj, dir){
+  #library(loomR)
+  #library(hdf5r)
+  #library(Seurat)
+  
+  seur <- readRDS(obj)
+  
+  if(!grepl('^seurat',class(seur)[1],ignore.case = T)){
+    showNotification('Error: The selected object is of class ', class(seur)[1], ' but must be of class Seurat', type = 'error')
+  }
+  
+  current_version <- 3
+  if(strsplit(as.character(seur@version), split = '\\.')[[1]][1]<current_version){
+    showNotification(paste0("Warning: The selected seurat object is out of date (version: ", seur@version, "). Updating to object now..."), type = 'error')
+    seur <- UpdateSeuratObject(seur)
+    showNotification(paste0("Update complete"), type = 'message')
+  }
+  
+  project_dir <- paste0(dir,'/')
+  
+  #down_sample <- round(6000/length(unique(seur$seurat_clusters)))
+  #seur <- subset(seur, downsample = down_sample, idents = 'seurat_clusters')
+  # if(dim(seur)[2]>6000){
+  #   seur <- subset(seur, cells = sample(Cells(seur), 6000))
+  # }
+  
+  assays <- names(seur@assays)
+  
+  flag <- FALSE
+  if(any(assays == 'integrated')){
+    assays <- assays[-grep('integrated|SCT',assays)]
+  }else if(any(assays=='SCT')){
+    assays <- assays[-grep('integrated|RNA',assays)]
+    flag <- TRUE
+  }
+  
+  for(assay in assays){
+    DefaultAssay(seur) <- assay
+    if(flag == TRUE && assay == "SCT"){
+      pseudo.assay <- "RNA"
+    }else{
+      pseudo.assay <- assay
+    }
+    filename <- paste0(project_dir,pseudo.assay,".loom")
+    loomR::create(filename = filename, data = seur[[assay]]@data, calc.count = F, overwrite = T)
+    data <- loomR::connect(filename = filename, mode = "r+")
+    data$link_delete('row_attrs/Gene')
+    
+    # add metadata
+    meta.data <- seur@meta.data
+    colnames(meta.data) <- paste0(colnames(meta.data),"_meta_data")
+    
+    data$add.col.attribute(as.list(meta.data))
+    data$add.row.attribute(list(features = rownames(seur[[pseudo.assay]])))
+    
+    # add reduction embeddings
+    reduction_names <- names(seur@reductions)
+    for(i in 1:length(reduction_names)){
+      reductions <- as.data.frame(seur@reductions[[i]]@cell.embeddings)
+      assay_used <- tolower(seur@reductions[[i]]@assay.used)
+      #if(!grepl(paste0('(?![a-z])(?<![a-z])(',assay_used,')'),reduction_names[i],perl = T,ignore.case = T)){
+      if(!grepl(assay_used,reduction_names[i], ignore.case = T, fixed = T)){
+        reduction_names[i] <- paste0(reduction_names[i],'_',assay_used)
+      }
+      n <- ncol(reductions)
+      if(n>3){
+        for(j in 2:3){
+          tmp <- reductions[,1:j]
+          tmp_name <- reduction_names[i]
+          if(!grepl(paste0('(?![a-z])(?<![a-z])(',j,'d)'),tmp_name,perl=T,ignore.case = T)){
+            tmp_name <- paste0(tmp_name,'_',j,'d')
+          }
+          if(grepl(' ', tmp_name)){
+            tmp_name <- gsub(' ','_',tmp_name)
+          }
+          colnames(tmp) <- paste0(tmp_name,'_',1:j,'_reduction')
+          data$add.col.attribute(as.list(tmp))
+        }
+      }else{
+        if(!grepl(paste0('(?![a-z])(?<![a-z])(',n,'d)'),reduction_names[i],perl=T,ignore.case = T)){
+          reduction_names[i] <- paste0(reduction_names[i],'_',n,'d')
+        }
+        if(grepl(' ', reduction_names[i])){
+          reduction_names[i] <- gsub(' ','_',reduction_names[i])
+        }
+        colnames(reductions) <- paste0(reduction_names[i],'_',1:n,'_reduction')
+        data$add.col.attribute(as.list(reductions))
+      }
+    }
+    data$close_all()
+  }
+  return(1)
+}
+
+withBusyIndicatorCSS <- "
+.btn-loading-container {
+margin-left: 10px;
+font-size: 1.2em;
+}
+.btn-done-indicator {
+color: green;
+}
+.btn-err {
+margin-top: 10px;
+color: red;
+}
+"
+
+withBusyIndicatorUI <- function(button) {
+  id <- button[['attribs']][['id']]
+  div(
+    shinyjs::useShinyjs(),
+    singleton(tags$head(
+      tags$style(withBusyIndicatorCSS)
+    )),
+    `data-for-btn` = id,
+    button,
+    span(
+      class = "btn-loading-container",
+      shinyjs::hidden(
+        icon("spinner", class = "btn-loading-indicator fa-spin"),
+        icon("check", class = "btn-done-indicator")
+      )
+    ),
+    shinyjs::hidden(
+      div(class = "btn-err",
+          div(icon("exclamation-circle"),
+              tags$b("Error: "),
+              span(class = "btn-err-msg")
+          )
+      )
+    )
+  )
+}
+withBusyIndicatorServer <- function(buttonId, expr) {
+  # UX stuff: show the "busy" message, hide the other messages, disable the button
+  loadingEl <- sprintf("[data-for-btn=%s] .btn-loading-indicator", buttonId)
+  doneEl <- sprintf("[data-for-btn=%s] .btn-done-indicator", buttonId)
+  errEl <- sprintf("[data-for-btn=%s] .btn-err", buttonId)
+  shinyjs::disable(buttonId)
+  shinyjs::show(selector = loadingEl)
+  shinyjs::hide(selector = doneEl)
+  shinyjs::hide(selector = errEl)
+  on.exit({
+    shinyjs::enable(buttonId)
+    shinyjs::hide(selector = loadingEl)
+  })
+  
+  # Try to run the code when the button is clicked and show an error message if
+  # an error occurs or a success message if it completes
+  tryCatch({
+    value <- expr
+    shinyjs::show(selector = doneEl)
+    shinyjs::delay(2000, shinyjs::hide(selector = doneEl, anim = TRUE, animType = "fade",
+                                       time = 0.5))
+    value
+  }, error = function(err) { errorFunc(err, buttonId) })
+}
+
+errorFunc <- function(err, buttonId) {
+  errEl <- sprintf("[data-for-btn=%s] .btn-err", buttonId)
+  errElMsg <- sprintf("[data-for-btn=%s] .btn-err-msg", buttonId)
+  errMessage <- gsub("^ddpcr: (.*)", "\\1", err$message)
+  shinyjs::html(html = errMessage, selector = errElMsg)
+  shinyjs::show(selector = errEl, anim = TRUE, animType = "fade")
+}
+
 reorder_levels <- function(x){
   if(!is.factor(x)){
     x <- as.factor(x)
@@ -85,7 +252,9 @@ dotPlot <- function(
   if(!any(names(data$col.attrs) == group.by) | !any(features%in%data$row.attrs$features[])){
     return(NULL)
   }
-  index <- unlist(lapply(features,grep,x=data$row.attrs$features[],fixed=T))
+  index <- unlist(lapply(features, function(x){
+    grep(x, data$row.attrs$features[], fixed=T)[1]
+    }))
   data.features <- as.data.frame(data[['matrix']][,index])
   if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
   rownames(data.features) <- data$col.attrs$CellID[]
@@ -234,9 +403,9 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   col.attrs <- names(data[[assay.in]]$col.attrs)
 
   group.by <- paste0(group.by,'_meta_data')
-  if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
-    return(NULL)
-  }
+  # if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
+  #   return(NULL)
+  # }
   if(!any(col.attrs == group.by)){
     return(NULL)
   }
@@ -334,9 +503,9 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
 featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.res, data){
   
   group.by <- paste0(group.by,'_meta_data')
-  if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
-    return(NULL)
-  }
+  # if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
+  #   return(NULL)
+  # }
   if(!any(names(data[[assay.in]]$col.attrs) == group.by)){
     return(NULL)
   }
@@ -431,7 +600,9 @@ split_dot_plot <- function(data,
   
   group.by <- paste0(group.by,'_meta_data')
   split.by <- paste0(split.by,'_meta_data')
-  index <- unlist(lapply(features,grep,x=data$row.attrs$features[],fixed=T))
+  index <- unlist(lapply(features, function(x){
+    grep(x, data$row.attrs$features[], fixed=T)[1]
+    }))
   data.features <- as.data.frame(data[['matrix']][,index])
   if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
   rownames(data.features) <- data$col.attrs$CellID[]

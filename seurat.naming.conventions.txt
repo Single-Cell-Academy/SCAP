@@ -1,5 +1,9 @@
 // seurat conventions
 
+Cell IDs:
+- It is computationally beneficially to use the shortest possible cell IDs, i.e. [batch]_[cell barcode]
+- It is suggested to use underscores in the cell IDs rather than periods or other special characters which may result in irregular matches when indexing by cell ID
+
 meta data:
 - only include relevant meta data in object
 - use intuitive names

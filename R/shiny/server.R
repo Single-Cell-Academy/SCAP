@@ -2,11 +2,15 @@
 
 server <- function(input, output, session){
   
+  session$onSessionEnded(stopApp)
+  
   # set working dir and source required functions
   options(shiny.maxRequestSize=500*1024^2)
-  setwd("/Users/jsjoyal/Desktop/SCAP/")
-  volumes <- c(data = './test_data/')
-  source("./R/SCAP_functions.R")
+  # currently requires manual changing to conform with users file system...should be fixed.
+  # setwd("/Users/jsjoyal/Desktop/SCAP/")
+  
+  volumes <- getVolumes()#c(projects = './test_data/projects/')
+  #source("./R/SCAP_functions.R")
   
   # import data
   output$data_used <- renderText({
@@ -40,16 +44,16 @@ server <- function(input, output, session){
     return(sample(1:10^9,1))
   })
   
+  
+  # global variables
+  m <- NULL # annotations tab: stores the normalized count matrix as a sparse matrix for speed
+  tmp_annotations <- NULL # annotations tab: temporarily stores the custom annonations supplied by the user
+  meta_options_old <- NULL # depricated
+  cells <- NULL # annotations tab: stores a vector of cell IDs selected by the user (via plotly lasso)
+  marker_tables <- list() # annotation tab: stores the tables of top 10 marker features for speed
+  order <- NULL # custom metadata tab: stores the order of slected meta data by which order it was selected, rather than alpha-numerically 
+  
   ###==============// MAIN TAB //==============####
-  
-  resolution.trigger <- makeReactiveTrigger()
-  
-  # global variables used by this tab
-  grouping_options_old <- NULL
-  
-  observeEvent(input$low_res_1,{
-    resolution.trigger$trigger()
-  })
   
   #-- select input for Assay --#
   output$assay_1 <- renderUI({
@@ -67,13 +71,14 @@ server <- function(input, output, session){
     assay <- input$assay_1
     cols <- names(data[[assay]]$col.attrs)
     grouping_options <- cols[grep('_meta_data$',cols)]
+    df <- data[[assay]]$get.attribute.df(attributes = grouping_options)
+    pass <- unlist(lapply(grouping_options, function(x){length(unique(df[,x]))<50}))
+    grouping_options <- grouping_options[which(pass)]
     if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
     }else{
       sel <- sub("_meta_data","",grouping_options[1])
     }
-    grouping_options_old <<- grouping_options
-    
     selectInput(inputId = 'grouping_1', label = 'Group By', choices = sub("_meta_data$","",grouping_options), selected = sel, multiple = FALSE)
   })
   
@@ -84,7 +89,7 @@ server <- function(input, output, session){
     assay <- input$assay_1
     options <- names(data[[assay]]$col.attrs)
     l.assay <- tolower(assay)
-    reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options)&grepl(l.assay,options))]))
+    reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
     selectInput(inputId = 'reduction_1', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
   })
   
@@ -104,6 +109,7 @@ server <- function(input, output, session){
     selectInput(inputId = 'dotplot_1_feature_select', label = 'Choose Features to Visualize on Dot Plot', choices = data[[assay]][['row_attrs/features']][], selected = data[[assay]][['row_attrs/features']][3], multiple = TRUE)
   })
   
+  #-- visualize dotplot as a split dotplot --#
   output$do_split <- renderUI({
     req(data_update())
     req(input$assay_1)
@@ -128,16 +134,14 @@ server <- function(input, output, session){
     req(data_update())
     req(input$grouping_1)
     req(input$reduction_1)
-    resolution.trigger$depend()
-    dimPlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, annot_panel = "", low.res = 'no',data = data)
+    dimPlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, annot_panel = "", low.res = 'yes',data = data)
   })
   
   #-- dimensional reduction plot coloured by feature expression --#
   output$featureplot_1 <- renderPlotly({
     req(data_update())
     req(input$featureplot_1_feature.select)
-    resolution.trigger$depend()
-    featurePlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, feature.in = input$featureplot_1_feature.select, low.res = 'no', data = data)
+    featurePlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, feature.in = input$featureplot_1_feature.select, low.res = 'yes', data = data)
   })
   
   #-- dot plot for selected feature expression --#
@@ -207,22 +211,28 @@ server <- function(input, output, session){
   
   ###==============// ANNOTATION TAB //==============####
   
-  #-- switch to low resolution plots to improve performance with large datasets --#
-  observeEvent(input$low_res_2,{
-    resolution.trigger$trigger()
+  #-- store tables of top 10 marker features --#
+  #-- and store normalized count matrix in memory for speed --#
+  observeEvent(data_update(), ignoreInit = TRUE, {
+    showModal(modalDialog(p("Initializing data for better performance...This may take a little while."), title = paste0("Getting things set up for ", input$directory[[1]][2])), session = getDefaultReactiveDomain())
+    marker_tables <<- list()
+    assay_matrices <<- list()
+    for(x in names(data)){
+      assay_matrices[[x]] <<- t(Matrix(data = data[[x]]$matrix[,], sparse = TRUE))
+      rownames(assay_matrices[[x]]) <<- data[[x]]$row.attrs$features[]
+      colnames(assay_matrices[[x]]) <<- data[[x]]$col.attrs$CellID[]
+    }
+    cells <<- NULL
+    removeModal(session = getDefaultReactiveDomain())
   })
   
-  #-- global variables used by this tab --#
-  tmp_annotations <- NULL
-  meta_options_old <- NULL
-  cells <- NULL
-  
   #-- reactive triggers used by this tab --#
-  
   # triggered when adding custom annotations
   tmp.trigger <- makeReactiveTrigger()
   # triggered when saving custom annotations
   annot.trigger <- makeReactiveTrigger()
+  #
+  matrix.trigger <- makeReactiveTrigger()
   
   #-- select input for Assay --#
   output$assay_2 <- renderUI({
@@ -246,6 +256,9 @@ server <- function(input, output, session){
     assay <- input$assay_2
     cols <- names(data[[assay]]$col.attrs)
     meta_options <- cols[grep('_meta_data$',cols)]
+    df <- data[[assay]]$get.attribute.df(attributes = meta_options)
+    pass <- unlist(lapply(meta_options, function(x){length(unique(df[,x]))<50}))
+    meta_options <- meta_options[which(pass)]
     if(!is.null(meta_options_old) & (length(meta_options)!=length(meta_options_old))){
       sel <- sub("_meta_data$", "", meta_options[!meta_options%in%meta_options_old])
     }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",meta_options), fixed = TRUE))){
@@ -265,7 +278,7 @@ server <- function(input, output, session){
     assay <- input$assay_2
     options <- names(data[[assay]]$col.attrs)[grep("_2d",names(data[[assay]]$col.attrs))]
     l.assay <- tolower(assay)
-    reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options)&grepl(l.assay,options))]))
+    reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
     selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
   })
   
@@ -295,22 +308,20 @@ server <- function(input, output, session){
   
   #-- dimensional reduction plot coloured by cell groups --#
   output$dimplot_2 <- renderPlotly({
-    resolution.trigger$depend()
     req(data_update())
     req(input$grouping_2)
     tmp.trigger$depend()
     annot.trigger$depend()
-    dimPlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, annot_panel = input$annot_panel, tmp_annotations = tmp_annotations, low.res = input$low_res_2, data = data)
+    dimPlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, annot_panel = input$annot_panel, tmp_annotations = tmp_annotations, low.res = 'yes', data = data)
   })
   
   #-- dimensional reduction plot coloured by feature expression --#
   output$featureplot_2 <- renderPlotly({
-    resolution.trigger$depend()
     req(data_update())
     req(input$featureplot_2_feature_select)
     tmp.trigger$depend()
     annot.trigger$depend()
-    featurePlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, feature.in = input$featureplot_2_feature_select, low.res = input$low_res_2, data = data)
+    featurePlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, feature.in = input$featureplot_2_feature_select, low.res = 'yes', data = data)
   })
   
   #-- Find the markers for the 1) selected cells compared to all other cells or
@@ -323,22 +334,47 @@ server <- function(input, output, session){
       if(!any(names(data[[input$assay_2]]$col.attrs) == grouping)){
         return(NULL)
       }
+      if(is.null(assay_matrices) | identical(assay_matrices, list())){
+        return(NULL)
+      }
+      group_assay <- paste(input$grouping_2, input$assay_2, sep = '_')
+      if(any(group_assay%in%names(marker_tables)) & is.null(cells)){
+        #print('in')
+        #t1 <- Sys.time()
+        t <- marker_tables[[group_assay]]
+        #print(Sys.time()-t1)
+      }else{
+        #print('not in')
+        #t1 <- Sys.time()
+        #m <- t(data[[input$assay_2]]$matrix[,])
+        #rownames(m) <- data[[input$assay_2]]$row.attrs$features[]
+        #colnames(m) <- data[[input$assay_2]]$col.attrs$CellID[]
+        y <- data[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
+        #print(Sys.time() - t1)
+        cell_ids <- colnames(assay_matrices[[input$assay_2]])
+        #print(Sys.time() - t1)
+        cols <- unlist(lapply(cells[,1], function(x){
+          grep(x ,cell_ids, fixed = TRUE)
+        }))
+        #print(Sys.time() - t1)
+        if(!is.null(cells)){
+          y[cols] <- 'Selected'
+        }
+        #print(str(assay_matrices[[input$assay_2]]))
+        #print(Sys.time() - t1)
+        t <- as.data.frame(top_markers(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y), n = 10))[1:10,]
+        #print(Sys.time() - t1)
+        if(is.null(cells)){
+          marker_tables[[group_assay]] <<- t
+        }
+        #print(Sys.time() - t1)
+      }
       
-      m <- t(data[[input$assay_2]]$matrix[,])
-      rownames(m) <- data[[input$assay_2]]$row.attrs$features[]
-      colnames(m) <- data[[input$assay_2]]$col.attrs$CellID[]
-      
-      y <- data[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
-      cols <- unlist(lapply(cells[,1], function(x){
-        grep(x,data[[input$assay_2]]$col.attrs$CellID[])
-      }))
-      
-      if(!is.null(cells))
-        y[cols] <- 'Selected'
-      
-      t <- as.data.frame(top_markers(wilcoxauc(X = m, y = y), n = 10))[1:10,]
       if(!is.null(cells)){
+        print('sel')
+        t1 <- Sys.time()
         t <- as.data.frame(t[,which(colnames(t)=="Selected")],stringsAsFactors=FALSE)
+        print(Sys.time()-t1)
         names(t) <- "Markers for Selected Cells"
       }else{
         t <- t[,mixedsort(colnames(t))]
@@ -347,6 +383,7 @@ server <- function(input, output, session){
         index <- index[-rank]
         t <- t[,c(rank, index)]
       }
+      print(str(marker_tables))
       t
     }, hover = TRUE, width = '100%',align = 'c')
   })
@@ -508,6 +545,7 @@ server <- function(input, output, session){
     meta.trigger$trigger()
   })
   
+  #-- add custom metadata grouping to loom file --#
   observeEvent(input$add_new_meta_group,{
     if(is.null(input$meta_group_checkbox) || length(input$meta_group_checkbox)<2){
       showNotification('At least two meta data groups must be selected!', type = 'error')
@@ -526,5 +564,58 @@ server <- function(input, output, session){
       data[[input$assay_3]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
       update.trigger$trigger()
     }
+  })
+  
+  ###==============// FILE CONVERSION TAB //==============####
+  
+  shinyFileChoose(input, "object_file", roots = getVolumes(), session = session)
+  shinyDirChoose(input, "new_directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
+  
+  output$chosen_object_file <- renderText(parseFilePaths(selection = input$object_file, roots = getVolumes())$datapath)
+  
+  output$chosen_new_directory <- renderText(parseDirPath(roots = volumes, selection = input$new_directory))
+  
+  observeEvent(input$object_file, ignoreInit = T, ignoreNULL = T, {
+    file_path <- parseFilePaths(selection = input$object_file, roots = getVolumes())$datapath
+    if(identical(file_path,character(0))){
+      return(NULL)
+    }
+    file_size <- fileSize(file_path, units = 'GB')
+    if(file_size>1){
+      output$notes <- renderText(paste0('Warning: The selected file is larger than 1 GB (',round(file_size,2),' GB) and may take some time to load depending on your computer (if running locally) or the server (if running on the cloud)'))
+    }else{
+      output$notes <- NULL
+    }
+  })
+  
+  
+  observeEvent(input$sl_convert, ignoreInit = T, {
+    if(is.null(input$object_file)){
+      showNotification('A seurat object must be selected', type = 'error')
+      return(NULL)
+    }else if(is.null(input$new_directory)){
+      showNotification('A directory to save the converted file to must be selected', type = 'error')
+      return(NULL)
+    }
+    dir_path <- parseDirPath(roots = volumes, selection = input$new_directory)
+
+    if(length(list.files(dir_path))>0){
+      showNotification('The selected directory already contains files. Please used a new/empty directory.', type = 'error')
+      return(NULL)
+    }
+    
+    file_path <- parseFilePaths(selection = input$object_file, roots = getVolumes())$datapath
+    
+    if(!grepl('\\.rds$', file_path, ignore.case = T)){
+      showNotification('The selected file must be of type .rds', type = 'error')
+      return(NULL)
+    }
+    
+    withBusyIndicatorServer("sl_convert", {
+      error <- seuratToLoom(obj = file_path, dir = dir_path)
+      if (error != 1) {
+        stop("An error has occured")
+      }
+    })
   })
 } # server end

@@ -77,7 +77,7 @@ ui <- navbarPage(
           wellPanel(
             style  = 'background: white;',
             fluidRow(
-             uiOutput('dotplot_1')
+             uiOutput('dotplot_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
             ),
             fluidRow(
               column(
@@ -144,12 +144,6 @@ ui <- navbarPage(
       mainPanel(
         fluidRow(
           column(
-            width = 12,
-            radioButtons('low_res_2', label = "Lower plot resolution to increase cell selection speed", choices = c('yes','no'), selected = 'no', inline = T)
-          )
-        ),
-        fluidRow(
-          column(
             width = 6,
             wellPanel(
               style  = 'background: white;padding: 20px',
@@ -195,6 +189,46 @@ ui <- navbarPage(
         h1(textOutput(outputId = 'example_meta_group_name')),
         tableOutput(outputId = 'example_meta_group')
       )
+    )
+  ),
+  tabPanel(
+    "File Conversion",
+    sidebarPanel(
+      tabsetPanel(
+        tabPanel(
+          'Seurat to Loom',
+          fluidRow(
+            shinyFilesButton(id = "object_file", label = "Choose Seurat Object to Convert", title = "Choose Seurat Object to Convert", multiple = F),
+            shinyDirButton(id = "new_directory", label = "Select Directory", title = "Choose where to save converted loom files. The slected directory should be a new directory or empty"),
+            withBusyIndicatorUI(actionButton(inputId = 'sl_convert', label = 'Convert'))
+          ),
+          fluidRow(
+            conditionalPanel(
+              condition = 'input.object_file',
+              h3('Selected file:'),
+              h4(textOutput(outputId = 'chosen_object_file')),
+              h4(textOutput(outputId = 'notes'))
+            )
+          ),
+          fluidRow(
+            conditionalPanel(
+              condition = 'input.new_directory',
+              h3('Selected directory:'),
+              h4(textOutput(outputId = 'chosen_new_directory'))
+            )
+          )
+        ),
+        tabPanel(
+          'Loom to Seurat',
+          h2('In Development')
+        ),
+        tabPanel(
+          'Downsize Object' 
+        )
+      )
+    ),
+    mainPanel(
+      #h1('Stuff Goes Here')
     )
   )
 )# end ui

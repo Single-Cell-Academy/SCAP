@@ -1,5 +1,5 @@
 # load required packages 
-pkgs <- c('shiny','Seurat','ggplot2','ggthemes','BiocManager','plotly','cowplot', 'dplyr','devtools','shinyjqui','shinythemes','gtools','pryr','shinyFiles')
+pkgs <- c('shiny','Seurat','ggplot2','ggthemes','BiocManager','plotly','cowplot', 'dplyr','devtools','shinyjqui','shinythemes','gtools','pryr','shinyFiles','Matrix','hdf5r','MODIS')
 lapply(X = pkgs, FUN = function(x){
   if(!require(x, character.only = TRUE))
     install.packages(x, repos = 'https://cloud.r-project.org/')
@@ -20,6 +20,8 @@ if(!require('loomR'))
   BiocManager::install('loomR')
 library(loomR)
 
+
+source("/Users/jsjoyal/Desktop/SCAP/R/SCAP_functions.R")
 # run app 
 runApp(appDir = '/Users/jsjoyal/Desktop/SCAP/R/shiny/')
 
