@@ -61,7 +61,7 @@ seuratToLoom <- function(obj, dir){
       reductions <- as.data.frame(seur@reductions[[i]]@cell.embeddings)
       assay_used <- tolower(seur@reductions[[i]]@assay.used)
       #if(!grepl(paste0('(?![a-z])(?<![a-z])(',assay_used,')'),reduction_names[i],perl = T,ignore.case = T)){
-      if(!grepl(assay_used,reduction_names[i], ignore.case = T, fixed = T)){
+      if(!grepl(assay_used,reduction_names[i], ignore.case = T)){
         reduction_names[i] <- paste0(reduction_names[i],'_',assay_used)
       }
       n <- ncol(reductions)
@@ -152,7 +152,7 @@ withBusyIndicatorServer <- function(buttonId, expr) {
   # an error occurs or a success message if it completes
   tryCatch({
     value <- expr
-    shinyjs::show(selector = doneEl)
+    shinyjs::show(selector = doneEl, time = 30)
     shinyjs::delay(2000, shinyjs::hide(selector = doneEl, anim = TRUE, animType = "fade",
                                        time = 0.5))
     value

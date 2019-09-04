@@ -1,10 +1,9 @@
-# load required packages 
+#-- Install and load required packages --#
 pkgs <- c('shiny','Seurat','ggplot2','ggthemes','BiocManager','plotly','cowplot', 'dplyr','devtools','shinyjqui','shinythemes','gtools','pryr','shinyFiles','Matrix','hdf5r','MODIS')
 lapply(X = pkgs, FUN = function(x){
   if(!require(x, character.only = TRUE))
     install.packages(x, repos = 'https://cloud.r-project.org/')
 })
-
 lapply(X = pkgs, FUN = function(x){
   if(!require(x, character.only = TRUE))
     library(x)
@@ -17,11 +16,12 @@ if(!require('presto'))
 library(presto)
 library(shinycssloaders)
 if(!require('loomR'))
-  BiocManager::install('loomR')
+  devtools::install_github('https://github.com/mojaveazure/loomR.git', res = 'develop')
 library(loomR)
 
-
+#-- Source required functions --#
 source("/Users/jsjoyal/Desktop/SCAP/R/SCAP_functions.R")
-# run app 
+
+#-- run app --# 
 runApp(appDir = '/Users/jsjoyal/Desktop/SCAP/R/shiny/')
 

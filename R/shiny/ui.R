@@ -198,9 +198,16 @@ ui <- navbarPage(
         tabPanel(
           'Seurat to Loom',
           fluidRow(
-            shinyFilesButton(id = "object_file", label = "Choose Seurat Object to Convert", title = "Choose Seurat Object to Convert", multiple = F),
-            shinyDirButton(id = "new_directory", label = "Select Directory", title = "Choose where to save converted loom files. The slected directory should be a new directory or empty"),
-            withBusyIndicatorUI(actionButton(inputId = 'sl_convert', label = 'Convert'))
+            style = 'padding:10px',
+            shinyFilesButton(id = "object_file", label = "Choose Seurat Object to Convert", title = "Choose Seurat Object to Convert", multiple = F, style = "width:100%")
+          ),
+          fluidRow(
+            style = 'padding:10px',
+            shinyDirButton(id = "new_directory", label = "Select Directory", title = "Choose where to save converted loom files. The slected directory should be a new directory or empty", style = "width:100%")
+          ),
+          fluidRow(
+            style = 'padding:10px',
+            withBusyIndicatorUI(actionButton(inputId = 'sl_convert', label = 'Convert', icon = icon('arrow-circle-down'), style = "width:100%"))
           ),
           fluidRow(
             conditionalPanel(
@@ -223,7 +230,8 @@ ui <- navbarPage(
           h2('In Development')
         ),
         tabPanel(
-          'Downsize Object' 
+          'Downsize Object',
+          h2('In Development')
         )
       )
     ),

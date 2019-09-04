@@ -66,6 +66,7 @@ server <- function(input, output, session){
   
   #-- select how to group cells --#
   output$grouping_1 <- renderUI({
+    annot.trigger$depend()
     req(data_update())
     req(input$assay_1)
     assay <- input$assay_1
