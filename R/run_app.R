@@ -17,7 +17,7 @@ if(!require('presto'))
 library(presto)
 library(shinycssloaders)
 if(!require('loomR'))
-  BiocManager::install('loomR')
+  devtools::install_github('https://github.com/mojaveazure/loomR.git', res = 'develop')
 library(loomR)
 
 
