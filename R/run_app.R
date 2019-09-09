@@ -1,5 +1,5 @@
 #-- Install and load required packages --#
-pkgs <- c('shiny','Seurat','ggplot2','ggthemes','BiocManager','plotly','cowplot', 'dplyr','devtools','shinyjqui','shinythemes','gtools','pryr','shinyFiles','Matrix','hdf5r','MODIS')
+pkgs <- c('shiny','shinyjs','Seurat','ggplot2','ggthemes','BiocManager','plotly','cowplot', 'dplyr','devtools','shinyjqui','shinythemes','gtools','pryr','shinyFiles','Matrix','hdf5r','MODIS')
 lapply(X = pkgs, FUN = function(x){
   if(!require(x, character.only = TRUE))
     install.packages(x, repos = 'https://cloud.r-project.org/')
@@ -16,7 +16,7 @@ if(!require('presto'))
 library(presto)
 library(shinycssloaders)
 if(!require('loomR'))
-  devtools::install_github('https://github.com/mojaveazure/loomR.git', res = 'develop')
+  devtools::install_github('https://github.com/mojaveazure/loomR.git', ref = 'develop')
 library(loomR)
 
 #-- Source required functions --#
