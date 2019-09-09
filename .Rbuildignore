@@ -1,0 +1,7 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.gitignore$
+^README\.md$
+^seurat\.naming\.conventions\.txt$
+^test_data$
+^R/SeuratToLoom\.R$

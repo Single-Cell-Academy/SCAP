@@ -1,5 +1,10 @@
-# User Interface
-
+#' Shiny app ui object
+#'
+#' @import shiny
+#' @import shinycssloaders
+#' @import shinyFiles
+#' @import shinyjqui
+#' @import shinythemes
 ui <- navbarPage(
   fluid = TRUE,
   theme = shinytheme('cosmo'),

@@ -1,5 +1,22 @@
-#---------------------- Server ---------------------------#
-
+#' Shiny app server function
+#'
+#' @import cowplot
+#' @import dplyr
+#' @import ggplot2
+#' @import ggthemes
+#' @import gtools
+#' @import hdf5r
+#' @import loomR
+#' @import Matrix
+#' @import MODIS
+#' @import plotly
+#' @import presto
+#' @import Seurat
+#' @import shiny
+#' @import shinycssloaders
+#' @import shinyFiles
+#' @import shinyjqui
+#' @import shinythemes
 server <- function(input, output, session){
   
   session$onSessionEnded(stopApp)

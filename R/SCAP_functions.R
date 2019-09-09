@@ -1,3 +1,23 @@
+#' Functions For Shiny App 
+#' 
+#' @import cowplot
+#' @import dplyr
+#' @import ggplot2
+#' @import ggthemes
+#' @import gtools
+#' @import hdf5r
+#' @import loomR
+#' @import Matrix
+#' @import MODIS
+#' @import plotly
+#' @import presto
+#' @import Seurat
+#' @import shiny
+#' @import shinycssloaders
+#' @import shinyFiles
+#' @import shinyjqui
+#' @import shinythemes
+
 #my.pal <- c(RColorBrewer::brewer.pal(12,'Set3'),RColorBrewer::brewer.pal(12,'Paired'))
 
 seuratToLoom <- function(obj, dir){
