@@ -244,4 +244,7 @@ ui <- navbarPage(
       #h1('Stuff Goes Here')
     )
   )
-)
+)# end ui
+#jqui_resizable(jqui_draggable(
+#%>% withSpinner(color="#0dc5c1")
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++#

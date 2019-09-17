@@ -47,6 +47,7 @@ seuratToLoom <- function(obj, dir){
       seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^MT-')
     }else if(any(grepl('^mt-', rownames(seur)))){
       seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^mt-')
+    }
   }
   
   project_dir <- paste0(dir,'/')
