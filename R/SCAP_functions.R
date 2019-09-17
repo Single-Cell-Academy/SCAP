@@ -38,6 +38,17 @@ seuratToLoom <- function(obj, dir){
     showNotification(paste0("Update complete"), type = 'message')
   }
   
+  # make sure percent.mito is added to the object
+  if(any(names(seur@assays)=='RNA')){
+    DefaultAssay(seur) <- 'RNA'
+  }
+  if(any(colnames(seur@meta.data) == 'percent.mito') == FALSE){
+    if(any(grepl('^MT-', rownames(seur)))){
+      seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^MT-')
+    }else if(any(grepl('^mt-', rownames(seur)))){
+      seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^mt-')
+  }
+  
   project_dir <- paste0(dir,'/')
   
   #down_sample <- round(6000/length(unique(seur$seurat_clusters)))
