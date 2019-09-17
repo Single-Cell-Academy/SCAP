@@ -632,11 +632,10 @@ server <- function(input, output, session){
     error <- seuratToLoom(obj = file_path, dir = dir_path)
     removeModal(session = getDefaultReactiveDomain())
     if(error != 1){
-      showModal(modalDialog(p("Oops, looks like something went wrong. Try again, or contact developer for assistance."), title = "Error!", session = getDefaultReactiveDomain()))
+      showNotification('Error in file conversion!', type = 'error', closeButton = TRUE, duration = 100)
     }else{
-      showModal(modalDialog(p("Conversion complete. Close this window and navigate to the Main Tab to load in your data!"), title = "Successful Conversion!", session = getDefaultReactiveDomain()))
+      showNotification('Conversion Complete!', type = 'message', closeButton = F, duration = 30)
     }
-    removeModal(session = getDefaultReactiveDomain())
     # withBusyIndicatorServer("sl_convert", {
     #   error <- seuratToLoom(obj = file_path, dir = dir_path)
     #   if (error != 1) {
