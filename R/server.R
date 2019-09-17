@@ -628,7 +628,8 @@ server <- function(input, output, session){
       showNotification('The selected file must be of type .rds', type = 'error')
       return(NULL)
     }
-    showModal(modalDialog(p("Converting Seurat Object to loom file(s). Please Wait..."), title = "This window will close after conversion is complete", session = getDefaultReactiveDomain()))
+
+    showModal(modalDialog(p("Converting Seurat Object to loom file(s). Please Wait..."), title = "This window will close after conversion is complete"), session = getDefaultReactiveDomain())
     error <- seuratToLoom(obj = file_path, dir = dir_path)
     removeModal(session = getDefaultReactiveDomain())
     if(error != 1){
