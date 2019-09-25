@@ -20,6 +20,52 @@
 
 #my.pal <- c(RColorBrewer::brewer.pal(12,'Set3'),RColorBrewer::brewer.pal(12,'Paired'))
 
+loomToSeurat <- function(obj, loom, dir, file){
+  thisDate <- gsub(":","_",gsub(" ","_",date()))
+  print(paste("thisDate:", thisDate))
+  print(paste("obj:", obj))
+  print(paste("dir:", dir))
+  print(paste("file:", file))
+  print("loom:")
+  print(str(loom))
+  seur <- readRDS(obj)
+  print(nrow(seur@meta.data))
+  print("seur meta data:")
+  print(str(seur@meta.data))
+  print('loom # cells:')
+  print(loom[[1]]$col.attrs[[1]]$dims)
+  if(nrow(seur@meta.data) != loom[[1]]$col.attrs[[1]]$dims){
+    showModal(modalDialog(p("Error: Seurat object and loom object have different number of cells and likely do not coresspond to the same experiment"), title = paste0("ERROR")), session = getDefaultReactiveDomain())
+    return(-1)
+  }
+  loom_metaData <- loom[[1]]$get.attribute.df(attributes = names(loom[[1]]$col.attrs)[grep("_meta_data$", names(loom[[1]]$col.attrs))])
+  print("loom_metaData:")
+  print(colnames(loom_metaData))
+  colnames(loom_metaData) <- sub("_meta_data$","",colnames(loom_metaData))
+  print("loom_metaData:")
+  print(colnames(loom_metaData))
+  same_names <- colnames(loom_metaData)[which(colnames(loom_metaData)%in%colnames(seur@meta.data))]
+  if(length(same_names)>0){
+    for(i in 1:length(same_names)){
+      if(identical(loom_metaData[,same_names[i]],seur@meta.data[,same_names[i]])){
+        loom_metaData <- loom_metaData[,-which(colnames(loom_metaData)==same_names[i])]
+      }else{
+        colnames(loom_metaData)[which(colnames(loom_metaData)==same_names[i])] <- paste0(same_names[i],"_",thisDate)
+      }
+    }
+  }
+  print(paste("loom_metaData:", colnames(loom_metaData)))
+  seur@meta.data <- cbind(seur@meta.data, loom_metaData)
+  print(paste('new mata data:'))
+  print(str(seur@meta.data))
+  if(is.null(file)){
+    saveRDS(seur, obj)
+  }else{
+    saveRDS(seur, paste0(dir,"/",file))
+  }
+  return(1)
+}
+
 seuratToLoom <- function(obj, dir){
   #library(loomR)
   #library(hdf5r)
@@ -237,8 +283,10 @@ makeReactiveTrigger <- function() {
 }
 ###### reduc_key ##########
 reduc_key <- function(key){
-  if(!any(key == c("TSNE", "UMAP", "PCA", "DIFF")))
-    stop("Reduction unknown")
+  if(!any(key == c("TSNE", "UMAP", "PCA", "DIFF", "CCA"))){
+    showNotification("Reduction unknown. Axis labels may be poorly formatted")
+    return(key)
+  }
   if(key == "PCA")
     return("PC")
   if(key == "DIFF")
@@ -247,6 +295,8 @@ reduc_key <- function(key){
     return("tSNE")
   if(key == "UMAP")
     return("UMAP")
+  if(key == "CCA")
+    return("CCA")
 }
 
 ###### percentAbove #######

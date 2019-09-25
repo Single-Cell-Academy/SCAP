@@ -17,6 +17,7 @@
 #' @import shinyFiles
 #' @import shinyjqui
 #' @import shinythemes
+#' @import rjson
 server <- function(input, output, session){
   
   session$onSessionEnded(stopApp)
@@ -389,10 +390,10 @@ server <- function(input, output, session){
       }
       
       if(!is.null(cells)){
-        print('sel')
+        #print('sel')
         t1 <- Sys.time()
         t <- as.data.frame(t[,which(colnames(t)=="Selected")],stringsAsFactors=FALSE)
-        print(Sys.time()-t1)
+        #print(Sys.time()-t1)
         names(t) <- "Markers for Selected Cells"
       }else{
         t <- t[,mixedsort(colnames(t))]
@@ -401,7 +402,7 @@ server <- function(input, output, session){
         index <- index[-rank]
         t <- t[,c(rank, index)]
       }
-      print(str(marker_tables))
+      #print(str(marker_tables))
       t
     }, hover = TRUE, width = '100%',align = 'c')
   })
@@ -490,6 +491,45 @@ server <- function(input, output, session){
       }
     }
   })
+  
+  #-- genes to search from for ncbi query --#
+  output$gene_query <- renderUI({
+    req(data_update())
+    req(input$assay_2)
+    assay <- input$assay_2
+    selectInput(inputId = 'gene_query', label = 'Select a gene of interest to learn more', choices = data[[assay]][['row_attrs/features']][], selected = NA, multiple = FALSE)
+  })
+  
+  #-- get gene summary from ncbi --#
+  observeEvent(input$query_ncbi,{
+    if(is.null(input$gene_query) | is.na(input$gene_query) | identical(input$gene_query, "") | identical(input$gene_query, " ")){
+      showNotification("A valid gene must be entered", type = "error")
+      return(NULL)
+    }
+    id <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=gene&term=", input$gene_query, "[sym]+AND+",input$organism,"[orgn]&retmode=json"))$esearchresult$idlist
+    #print(id)
+    if(identical(id, list())){
+      output$gene_summary <- renderText({"Error: No genes matching this query were found on NCBI"})
+    }else{
+      if(length(id)>1){
+        showNotification('Caution: More that one gene matched this query. Only showing first match', type = 'warning')
+        id <- id[1]
+      }
+      output$gene_summary <- renderText({
+        results <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=gene&id=",id,"&retmode=json"))$result[[2]]
+        #print(str(results))
+        name <- results$name
+        #print(name)
+        alias <- results$otheraliases
+        #print(alias)
+        summary <- results$summary
+        #print(summary)
+        return(paste0("[id=",id,"][name=",name,"][aliases=", paste(alias, collapse = " "),"][summary=",summary,"]"))
+        })
+    }
+  })
+  
+  
   
   ###==============// CUSTOM META DATA TAB //==============####
   
@@ -635,7 +675,7 @@ server <- function(input, output, session){
     if(error != 1){
       showNotification('Error in file conversion!', type = 'error', closeButton = TRUE, duration = 100)
     }else{
-      showNotification('Conversion Complete!', type = 'message', closeButton = F, duration = 30)
+      showNotification('Conversion Complete!', type = 'message', closeButton = F, duration = 15)
     }
     # withBusyIndicatorServer("sl_convert", {
     #   error <- seuratToLoom(obj = file_path, dir = dir_path)
@@ -644,4 +684,57 @@ server <- function(input, output, session){
     #   }
     # })
   })
+  
+  shinyFileChoose(input, "update_file", roots = getVolumes(), session = session)
+  shinyDirChoose(input, "new_directory_2", roots = volumes, session = session, restrictions = system.file(package = "base"))
+  
+  output$chosen_update_file <- renderText(parseFilePaths(selection = input$update_file, roots = getVolumes())$datapath)
+  
+  output$chosen_new_directory_2 <- renderText(parseDirPath(roots = volumes, selection = input$new_directory_2))
+  
+  observeEvent(input$ls_convert, ignoreInit = T, {
+    if(is.null(input$update_file)){
+      showNotification('A seurat object must be selected', type = 'error')
+      return(NULL)
+    }else if(is.null(input$new_directory_2)){
+      showNotification('A directory to save the converted file to must be selected', type = 'error')
+      return(NULL)
+    }else if(is.null(input$new_file_name) & input$overwrite == "no"){
+      showNotification('A file name for the updated objet must be provided', type = 'error')
+      return(NULL)
+    }
+    dir_path <- parseDirPath(roots = volumes, selection = input$new_directory_2)
+    path_to_seurat <- parseFilePaths(selection = input$update_file, roots = getVolumes())$datapath
+    
+    if(input$overwrite == "no"){
+      file <- input$new_file_name
+      if(grepl(".rds$", file, ignore.case = T) == F){
+        file <- paste0(file,".rds")
+      }
+    }else{
+      file <- NULL
+    }
+
+    if(!grepl('\\.rds$', path_to_seurat, ignore.case = T)){
+      showNotification('The selected file must be of type .rds', type = 'error')
+      return(NULL)
+    }
+    
+    showModal(modalDialog(p("Converting Loom to Seurat. Please Wait..."), title = "This window will close after conversion is complete"), session = getDefaultReactiveDomain())
+    error <- loomToSeurat(obj = path_to_seurat, loom = data, dir = dir_path  , file = file)
+    removeModal(session = getDefaultReactiveDomain())
+    if(error != 1){
+      showNotification('Error in file conversion!', type = 'error', closeButton = TRUE, duration = 100)
+    }else{
+      showNotification('Conversion Complete!', type = 'message', closeButton = F, duration = 15)
+    }
+    # withBusyIndicatorServer("sl_convert", {
+    #   error <- seuratToLoom(obj = file_path, dir = dir_path)
+    #   if (error != 1) {
+    #     stop("An error has occured")
+    #   }
+    # })
+  })
+  
+  
 } # server end
