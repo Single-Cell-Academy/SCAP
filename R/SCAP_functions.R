@@ -20,6 +20,26 @@
 
 #my.pal <- c(RColorBrewer::brewer.pal(12,'Set3'),RColorBrewer::brewer.pal(12,'Paired'))
 
+save_figure <- function(file_type, file_name, units, height, width, resolution, to_plot){
+  if(file_type == "png"){
+    png(filename = file_name, units = units, height = height, width = width, res = resolution)
+    to_plot
+    dev.off()
+  }else if(file_type == "jpeg"){
+    jpeg(filename = file_name, units = units, height = height, width = width, res = resolution)
+    to_plot
+    dev.off()
+  }else if(file_type == "tiff"){
+    tiff(filename = file_name, units = units, height = height, width = width, res = resolution)
+    to_plot
+    dev.off()
+  }else if(file_type == "pdf"){
+    pdf(filename = file_name, units = units, height = height, width = width, res = resolution)
+    to_plot
+    dev.off()
+  }
+}
+
 loomToSeurat <- function(obj, loom, dir, file){
   thisDate <- gsub(":","_",gsub(" ","_",date()))
   print(paste("thisDate:", thisDate))
