@@ -138,30 +138,10 @@ ui <- navbarPage(
                 actionButton("add_to_tmp", "Add Annotation", style='padding:4px; font-size:80%')
               )
             )
-          ),
-          tabPanel(
-            value = 'gene_summary',
-            "NCBI Gene Summary",
-            fluidRow(
-              uiOutput('gene_query')
-            ),
-            fluidRow(
-              actionButton('query_ncbi', label = 'Search')
-              
-            ),
-            fluidRow(
-              radioButtons('organism', label = 'Choose the organism', choices = c('Human', 'Mouse'))
-            ),
-            fluidRow(
-              textOutput('gene_summary')
-            )
           )
         ),
-        conditionalPanel(
-          condition = "input.annot_panel!=='gene_summary'",
-          textInput('new_scheme_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
-          actionButton("set_cell_types", "Rename Clusters/Cells")
-        ),
+        textInput('new_scheme_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
+        actionButton("set_cell_types", "Rename Clusters/Cells"),
         h4("Selected Cells"),
         tableOutput('selected_cells'),
         tags$head(tags$style("#selected_cells{overflow-y:scroll; max-height: 200px; background: white;}"))
@@ -188,12 +168,35 @@ ui <- navbarPage(
         wellPanel(
           style  = 'background: white;',
           fluidRow(
-            h2('Find the defining markers of the selected cells', style = 'text-align: center;'),
-            actionButton('find.markers', "Find Markers for Selected Cells"),
-            h4('To clear selection... Double click on either plot and click button')
-          ),
-          fluidRow(
-            tableOutput('markers') %>% withSpinner(color="black")
+            column(
+              width = 8,
+              fluidRow(
+                h2('Find the defining markers of the selected cells', style = 'text-align: center;'),
+                actionButton('find.markers', "Find Markers for Selected Cells"),
+                h4('To clear selection... Double click on either plot and click button')
+              ),
+              fluidRow(
+                dataTableOutput('markers') %>% withSpinner(color="black"),
+                tags$head(tags$style("#markers{overflow-x:scroll; max-width: 90%; background: white;}"))
+              )
+            ),
+            column(
+              width = 4,
+              h2("NCBI Gene Summary"),
+              fluidRow(
+                uiOutput('gene_query')
+              ),
+              fluidRow(
+                actionButton('query_ncbi', label = 'Search')
+                
+              ),
+              fluidRow(
+                radioButtons('organism', label = 'Choose the organism', choices = c('Human', 'Mouse'))
+              ),
+              fluidRow(
+                textOutput('gene_summary')
+              )
+            )
           )
         )
       )

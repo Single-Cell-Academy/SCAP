@@ -316,7 +316,7 @@ server <- function(input, output, session){
     selected_cells <- as.data.frame(event_data("plotly_selected")$key, stringsAsFactors = FALSE)
     if (is.null(selected_cells) | ncol(selected_cells) == 0 | nrow(selected_cells) == 0){
       cells <<- NULL
-      return("Click and drag on either plot to select cells for marker identification (i.e., select/lasso) (double-click to clear selection)")
+      return("Click and drag on either plot to select cells for marker identification (i.e., select/lasso) (double-click on either plot to clear selection)")
     }else if(ncol(selected_cells)>1){
       selected_cells <- as.data.frame(as.character(selected_cells[1,]),stringsAsFactors = F)
     }
@@ -346,7 +346,7 @@ server <- function(input, output, session){
   #-- Find the markers for the 1) selected cells compared to all other cells or
   #-- 2) the markers that define each group. Depending on if cells are selected or not
   observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-    output$markers <- renderTable({
+    output$markers <- renderDataTable({
       req(data_update())
       req(input$grouping_2)
       grouping <- paste0(input$grouping_2,"_meta_data")
@@ -381,7 +381,12 @@ server <- function(input, output, session){
         }
         #print(str(assay_matrices[[input$assay_2]]))
         #print(Sys.time() - t1)
-        t <- as.data.frame(top_markers(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y), n = 10))[1:10,]
+        print(str(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)))
+        print(unique(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)$group))
+        #t <- as.data.frame(top_markers(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y), n = 10))[1:10,]
+        t <- as.data.frame(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y))
+        t <- t[-c(5,6)]
+        t$Specificity <- t$pct_in/(t$pct_out+1)
         #print(Sys.time() - t1)
         if(is.null(cells)){
           marker_tables[[group_assay]] <<- t
@@ -391,20 +396,22 @@ server <- function(input, output, session){
       
       if(!is.null(cells)){
         #print('sel')
-        t1 <- Sys.time()
-        t <- as.data.frame(t[,which(colnames(t)=="Selected")],stringsAsFactors=FALSE)
+        #t1 <- Sys.time()
+        t <- t[which(t$group == "Selected"),]
+        print(str(t))
         #print(Sys.time()-t1)
-        names(t) <- "Markers for Selected Cells"
-      }else{
-        t <- t[,mixedsort(colnames(t))]
-        index <- 1:ncol(t)
-        rank <- grep('rank',colnames(t))
-        index <- index[-rank]
-        t <- t[,c(rank, index)]
-      }
+        #names(t) <- "Markers for Selected Cells"
+      }#else{
+        #t <- t[mixedsort(t$group),]
+        #print(str(t))
+        #index <- 1:ncol(t)
+        #rank <- grep('rank',colnames(t))
+        #index <- index[-rank]
+        #t <- t[,c(rank, index)]
+      #}
       #print(str(marker_tables))
       t
-    }, hover = TRUE, width = '100%',align = 'c')
+    })
   })
   
   #-- display selected grouping name --#
