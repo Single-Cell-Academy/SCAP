@@ -126,22 +126,37 @@ seuratToLoom <- function(obj, dir){
   
   assays <- names(seur@assays)
   
-  flag <- FALSE
-  if(any(assays == 'integrated')){
-    assays <- assays[-grep('integrated|SCT',assays)]
-  }else if(any(assays=='SCT')){
-    assays <- assays[-grep('integrated|RNA',assays)]
-    flag <- TRUE
+  if(length(assays > 1)){
+    dims <- lapply(seur@assays, function(x){
+      return(dim(x@data))
+    })
+    names(dims) <- assays
+    assay_index <- NULL
+    if(any(names(assays)=="RNA" & dims[["RNA"]][2] > 0)){
+      for(i in 1:length(dims)){
+        if(dims[[i]][2]!=dims[["RNA"]][2]){
+          showNotification(paste0("Warning: the ", assays[i], "assay does not have the same number of cells (",dims[[i]][2],") as the RNA assay (", dims[["RNA"]][2],") and will be removed."), type = 'warning')
+          assay_index <- c(assay_index,i)
+        }
+      }
+    }else{
+      first_assay <- dims[[1]][2]
+      for(i in 2:length(dims)){
+        if(first_assay!=dims[[i]][2]){
+          showNotification(paste0("Warning: the ", assays[i], "assay does not have the same number of cells (",dims[[i]][2],") as the reference assay (", assay[1],": ",dims[["RNA"]][2],") and will be removed."), type = 'warning')
+          assay_index <- c(assay_index,i)
+        }
+      }
+    }
+    if(!is.null(assay_index)){
+      assays <- assays[-assay_index] 
+    }
   }
   
   for(assay in assays){
     DefaultAssay(seur) <- assay
-    if(flag == TRUE && assay == "SCT"){
-      pseudo.assay <- "RNA"
-    }else{
-      pseudo.assay <- assay
-    }
-    filename <- paste0(project_dir,pseudo.assay,".loom")
+    
+    filename <- paste0(project_dir,assay,".loom")
     loomR::create(filename = filename, data = seur[[assay]]@data, calc.count = F, overwrite = T)
     data <- loomR::connect(filename = filename, mode = "r+")
     data$link_delete('row_attrs/Gene')
@@ -151,12 +166,16 @@ seuratToLoom <- function(obj, dir){
     colnames(meta.data) <- paste0(colnames(meta.data),"_meta_data")
     
     data$add.col.attribute(as.list(meta.data))
-    data$add.row.attribute(list(features = rownames(seur[[pseudo.assay]])))
+    data$add.row.attribute(list(features = rownames(seur[[assay]])))
     
     # add reduction embeddings
     reduction_names <- names(seur@reductions)
     for(i in 1:length(reduction_names)){
       reductions <- as.data.frame(seur@reductions[[i]]@cell.embeddings)
+      if(nrow(reductions)==0){
+        showNotification(paste0("Warning: There was no data found for the ", reduction_names[i], " reduction. Skipping this reduction."), type = 'warning')
+        next
+      }
       assay_used <- tolower(seur@reductions[[i]]@assay.used)
       #if(!grepl(paste0('(?![a-z])(?<![a-z])(',assay_used,')'),reduction_names[i],perl = T,ignore.case = T)){
       if(!grepl(assay_used,reduction_names[i], ignore.case = T)){
