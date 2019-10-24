@@ -381,8 +381,8 @@ server <- function(input, output, session){
         }
         #print(str(assay_matrices[[input$assay_2]]))
         #print(Sys.time() - t1)
-        print(str(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)))
-        print(unique(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)$group))
+        #print(str(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)))
+        #print(unique(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)$group))
         #t <- as.data.frame(top_markers(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y), n = 10))[1:10,]
         t <- as.data.frame(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y))
         t <- t[-c(5,6)]
@@ -398,7 +398,7 @@ server <- function(input, output, session){
         #print('sel')
         #t1 <- Sys.time()
         t <- t[which(t$group == "Selected"),]
-        print(str(t))
+        #print(str(t))
         #print(Sys.time()-t1)
         #names(t) <- "Markers for Selected Cells"
       }#else{
@@ -684,12 +684,6 @@ server <- function(input, output, session){
     }else{
       showNotification('Conversion Complete!', type = 'message', closeButton = F, duration = 15)
     }
-    # withBusyIndicatorServer("sl_convert", {
-    #   error <- seuratToLoom(obj = file_path, dir = dir_path)
-    #   if (error != 1) {
-    #     stop("An error has occured")
-    #   }
-    # })
   })
   
   shinyFileChoose(input, "update_file", roots = getVolumes(), session = session)
@@ -735,12 +729,6 @@ server <- function(input, output, session){
     }else{
       showNotification('Conversion Complete!', type = 'message', closeButton = F, duration = 15)
     }
-    # withBusyIndicatorServer("sl_convert", {
-    #   error <- seuratToLoom(obj = file_path, dir = dir_path)
-    #   if (error != 1) {
-    #     stop("An error has occured")
-    #   }
-    # })
   })
   
   

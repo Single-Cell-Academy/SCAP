@@ -274,7 +274,7 @@ ui <- navbarPage(
           ),
           fluidRow(
             style = 'padding:10px',
-            withBusyIndicatorUI(actionButton(inputId = 'sl_convert', label = 'Convert', icon = icon('arrow-circle-down'), style = "width:100%"))
+            actionButton(inputId = 'sl_convert', label = 'Convert', icon = icon('arrow-circle-down'), style = "width:100%")
           ),
           fluidRow(
             conditionalPanel(

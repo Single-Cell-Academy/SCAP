@@ -211,79 +211,6 @@ seuratToLoom <- function(obj, dir){
   return(1)
 }
 
-withBusyIndicatorCSS <- "
-.btn-loading-container {
-margin-left: 10px;
-font-size: 1.2em;
-}
-.btn-done-indicator {
-color: green;
-}
-.btn-err {
-margin-top: 10px;
-color: red;
-}
-"
-
-withBusyIndicatorUI <- function(button) {
-  id <- button[['attribs']][['id']]
-  div(
-    shinyjs::useShinyjs(),
-    singleton(tags$head(
-      tags$style(withBusyIndicatorCSS)
-    )),
-    `data-for-btn` = id,
-    button,
-    span(
-      class = "btn-loading-container",
-      shinyjs::hidden(
-        icon("spinner", class = "btn-loading-indicator fa-spin"),
-        icon("check", class = "btn-done-indicator")
-      )
-    ),
-    shinyjs::hidden(
-      div(class = "btn-err",
-          div(icon("exclamation-circle"),
-              tags$b("Error: "),
-              span(class = "btn-err-msg")
-          )
-      )
-    )
-  )
-}
-withBusyIndicatorServer <- function(buttonId, expr) {
-  # UX stuff: show the "busy" message, hide the other messages, disable the button
-  loadingEl <- sprintf("[data-for-btn=%s] .btn-loading-indicator", buttonId)
-  doneEl <- sprintf("[data-for-btn=%s] .btn-done-indicator", buttonId)
-  errEl <- sprintf("[data-for-btn=%s] .btn-err", buttonId)
-  shinyjs::disable(buttonId)
-  shinyjs::show(selector = loadingEl)
-  shinyjs::hide(selector = doneEl)
-  shinyjs::hide(selector = errEl)
-  on.exit({
-    shinyjs::enable(buttonId)
-    shinyjs::hide(selector = loadingEl)
-  })
-  
-  # Try to run the code when the button is clicked and show an error message if
-  # an error occurs or a success message if it completes
-  tryCatch({
-    value <- expr
-    shinyjs::show(selector = doneEl, time = 30)
-    shinyjs::delay(2000, shinyjs::hide(selector = doneEl, anim = TRUE, animType = "fade",
-                                       time = 0.5))
-    value
-  }, error = function(err) { errorFunc(err, buttonId) })
-}
-
-errorFunc <- function(err, buttonId) {
-  errEl <- sprintf("[data-for-btn=%s] .btn-err", buttonId)
-  errElMsg <- sprintf("[data-for-btn=%s] .btn-err-msg", buttonId)
-  errMessage <- gsub("^ddpcr: (.*)", "\\1", err$message)
-  shinyjs::html(html = errMessage, selector = errElMsg)
-  shinyjs::show(selector = errEl, anim = TRUE, animType = "fade")
-}
-
 reorder_levels <- function(x){
   if(!is.factor(x)){
     x <- as.factor(x)
@@ -520,7 +447,7 @@ dotPlot <- function(
 
 ######## dimPlotlyOutput #######
 dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tmp_annotations = NULL, low.res, data){
-  
+  #t1 <- Sys.time()
   col.attrs <- names(data[[assay.in]]$col.attrs)
 
   group.by <- paste0(group.by,'_meta_data')
@@ -536,9 +463,9 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   if(n<2 || n>3){
     showNotification(ui = paste0('Error: Invalid number of dimensions for ', reduc.in, ': ',n),type = 'error')
   }
-
+  #t2 <- Sys.time()
   plot.data <- data[[assay.in]]$get.attribute.df(attributes=c(reduc,group.by,'percent.mito_meta_data'))
-  
+  #print(paste("dimplot plot.data:", Sys.time()-t2))
   ann <- 50
   if(length(unique(plot.data[,ncol(plot.data)-1]))>ann){
     if (is.numeric(plot.data[,ncol(plot.data)-1])){
@@ -591,6 +518,7 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   }else{
     plot.data[,4]
   }
+  #t4 <- Sys.time()
   if(n == 2){
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], 
                  type = 'scatter', mode = 'markers', key = ~rownames(plot.data), alpha = 0.6, stroke = I('dimgrey'),
@@ -613,6 +541,8 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
                  hovertemplate = paste0('<b>%{text}</b><extra></extra>')
     ) %>% layout(title = ifelse(test = annot_panel == 'cell_annotation_custom', yes = paste0(assay.in, " data coloured by custom annotations"), no = paste0(assay.in, " data coloured by ", sub('_meta_data','',group.by))) ,scene = list(xaxis = ax.x, yaxis = ax.y, zaxis = ax.z, dragmode='lasso'),legend = list(x = 100, y = 0.5))
   }
+  #print(paste("dimplot plot:", Sys.time()-t4))
+  #print(paste("dimplot total:", Sys.time()-t1))
   if(low.res == 'yes'){
     return(p %>% toWebGL())
   }else{
@@ -622,7 +552,7 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
 
 ####### featurePlotlyOutput ##########
 featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.res, data){
-  
+  #t1 <- Sys.time()
   group.by <- paste0(group.by,'_meta_data')
   # if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
   #   return(NULL)
@@ -630,8 +560,9 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
   if(!any(names(data[[assay.in]]$col.attrs) == group.by)){
     return(NULL)
   }
-  
+  #t2 <- Sys.time()
   data.features <- as.data.frame(data[[assay.in]][['matrix']][,which(data[[assay.in]]$row.attrs$features[]%in%feature.in)])
+  #print(paste("featureplot data.features:", Sys.time()-t2))
   if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
   
   data.annot <- data[[assay.in]]$get.attribute.df(attributes=group.by)
@@ -641,9 +572,11 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
   
   dims <- names(data[[assay.in]]$col.attrs)[grepl(reduc.in,names(data[[assay.in]]$col.attrs))]
   
+  #t3 <- Sys.time()
   plot.data <- data[[assay.in]]$get.attribute.df(attributes=dims)
   plot.data <- cbind(plot.data,data.annot)
   plot.data <- cbind(plot.data,data.features)
+  #print(paste("featureplot cbinds:", Sys.time()-t3))
   
   label_key <- reduc_key(key = toupper(sub("_.*","",reduc.in)))
   
@@ -674,7 +607,7 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
     mirror=TRUE,
     ticks='none'
   )
-  
+  #t4 <- Sys.time()
   if(length(dims) == 2){
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2],
                  type = 'scatter', mode = 'markers', key = ~rownames(plot.data),
@@ -699,6 +632,8 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
                                         '<extra></extra>')
     ) %>% layout(title = feature.in , scene = list(xaxis = ax.x, yaxis = ax.y, zaxis = ax.z), dragmode='lasso' ,legend = list(x = 100, y = 0.5))
   }
+  #print(paste("featureplot plot:", Sys.time()-t4))
+  #print(paste("featureplot total:", Sys.time()-t1))
   if(low.res == 'yes'){
     return(p%>% toWebGL())
   }else{
