@@ -18,6 +18,28 @@
 #' @import shinyjqui
 #' @import shinythemes
 #' @import rjson
+
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("ggthemes")
+library("gtools")
+library("loomR")
+library("hdf5r")
+library("Matrix")
+library("MODIS")
+library("plotly")
+library("presto")
+library("Seurat")
+library("rjson")
+library("shiny")
+library("shinycssloaders")
+library("shinyFiles")
+library("shinyjqui")
+library("shinythemes")
+
+
+
 server <- function(input, output, session){
   
   session$onSessionEnded(stopApp)
@@ -27,8 +49,8 @@ server <- function(input, output, session){
   # currently requires manual changing to conform with users file system...should be fixed.
   # setwd("/Users/jsjoyal/Desktop/SCAP/")
   
-  volumes <- getVolumes()#c(projects = './test_data/projects/')
-  #source("./R/SCAP_functions.R")
+  volumes <- c(projects = '/home/joel/SCAP/test_data/projects/') #getVolumes()
+  source("SCAP_functions.R")
   
   # import data
   output$data_used <- renderText({
@@ -144,8 +166,12 @@ server <- function(input, output, session){
         return(x)
       }
     }))
-    choices <- sub("_meta_data$","",choices[grepl('_meta_data$',choices)])
-    radioButtons(inputId = 'split_by', label = 'Choose how to split the data', choices = choices, inline = FALSE)
+    if(is.null(choices)){
+      return("No conditions to split by.")
+    }else{
+      choices <- sub("_meta_data$","",choices[grepl('_meta_data$',choices)])
+      return(radioButtons(inputId = 'split_by', label = 'Choose how to split the data', choices = choices, inline = FALSE))
+    }
   })
   
   #-- dimensional reduction plot coloured by cell groups --#
@@ -346,7 +372,7 @@ server <- function(input, output, session){
   #-- Find the markers for the 1) selected cells compared to all other cells or
   #-- 2) the markers that define each group. Depending on if cells are selected or not
   observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-    output$markers <- renderDataTable({
+    output$markers <- DT::renderDataTable({
       req(data_update())
       req(input$grouping_2)
       grouping <- paste0(input$grouping_2,"_meta_data")

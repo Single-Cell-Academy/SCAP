@@ -5,6 +5,25 @@
 #' @import shinyFiles
 #' @import shinyjqui
 #' @import shinythemes
+
+library("shiny")
+library("shinycssloaders")
+library("shinyFiles")
+library("shinyjqui")
+library("shinythemes")
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("ggthemes")
+library("gtools")
+library("loomR")
+library("hdf5r")
+library("Matrix")
+library("MODIS")
+library("plotly")
+library("presto")
+library("Seurat")
+library("rjson")
 ui <- navbarPage(
   fluid = TRUE,
   theme = shinytheme('cosmo'),
@@ -176,7 +195,7 @@ ui <- navbarPage(
                 h4('To clear selection... Double click on either plot and click button')
               ),
               fluidRow(
-                dataTableOutput('markers') %>% withSpinner(color="black"),
+                DT::dataTableOutput('markers') %>% withSpinner(color="black"),
                 tags$head(tags$style("#markers{overflow-x:scroll; max-width: 90%; background: white;}"))
               )
             ),
