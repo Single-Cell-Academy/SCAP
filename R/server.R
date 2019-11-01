@@ -505,8 +505,9 @@ server <- function(input, output, session){
       new <- list(new)
       names(new) <- input$new_scheme_name
       if(!grepl("_meta_data$",names(new))) names(new) <- paste0(names(new),"_meta_data")
-      
-      data[[input$assay_2]]$add.col.attribute(attributes = new, overwrite = TRUE)
+      for(i in 1:length(data)){
+        data[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
+      }
       annot.trigger$trigger()
     }else{
       if(all(tmp_annotations=='unlabled')){
@@ -519,7 +520,9 @@ server <- function(input, output, session){
         if(!grepl("_meta_data$",names(new))){
           names(new) <- paste0(names(new),"_meta_data")
         }
-        data[[input$assay_2]]$add.col.attribute(attributes = new, overwrite = TRUE)
+        for(i in 1:length(data)){
+          data[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
+        } 
         annot.trigger$trigger()
       }
     }
