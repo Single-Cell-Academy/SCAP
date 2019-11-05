@@ -49,7 +49,7 @@ server <- function(input, output, session){
   # currently requires manual changing to conform with users file system...should be fixed.
   # setwd("/Users/jsjoyal/Desktop/SCAP/")
   
-  volumes <- c(projects = '/home/joel/SCAP/test_data/projects/') #getVolumes()
+  volumes <- c(projects = "/Users/jsjoyal/") #'/home/joel/SCAP/test_data/projects/'   #getVolumes()
   source("SCAP_functions.R")
   
   # import data
@@ -436,7 +436,7 @@ server <- function(input, output, session){
         #t <- t[,c(rank, index)]
       #}
       #print(str(marker_tables))
-      t
+      t %>% DT::datatable() %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3)
     })
   })
   
