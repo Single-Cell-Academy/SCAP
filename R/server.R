@@ -259,10 +259,16 @@ server <- function(input, output, session){
   #-- store tables of top 10 marker features --#
   #-- and store normalized count matrix in memory for speed --#
   observeEvent(data_update(), ignoreInit = TRUE, {
-    #showModal(modalDialog(p("Initializing data for better performance...This may take a little while."), title = paste0("Getting things set up for ", input$directory[[1]][2])), session = getDefaultReactiveDomain())
+    showModal(modalDialog(p("Initializing data for better performance...This may take a little while."), title = paste0("Getting things set up for ", input$directory[[1]][2])), session = getDefaultReactiveDomain())
     marker_tables <<- list()
+    assay_matrices <<- list()
+    for(x in names(data)){
+      assay_matrices[[x]] <<- t(Matrix(data = data[[x]]$matrix[,], sparse = TRUE))
+      rownames(assay_matrices[[x]]) <<- data[[x]]$row.attrs$features[]
+      colnames(assay_matrices[[x]]) <<- data[[x]]$col.attrs$CellID[]
+    }
     cells <<- NULL
-    #removeModal(session = getDefaultReactiveDomain())
+    removeModal(session = getDefaultReactiveDomain())
   })
   
   #-- reactive triggers used by this tab --#
@@ -373,6 +379,9 @@ server <- function(input, output, session){
       if(!any(names(data[[input$assay_2]]$col.attrs) == grouping)){
         return(NULL)
       }
+      if(is.null(assay_matrices) | identical(assay_matrices, list())){
+        return(NULL)
+      }
       group_assay <- paste(input$grouping_2, input$assay_2, sep = '_')
       if(any(group_assay%in%names(marker_tables)) & is.null(cells)){
         #print('in')
@@ -387,7 +396,7 @@ server <- function(input, output, session){
         #colnames(m) <- data[[input$assay_2]]$col.attrs$CellID[]
         y <- data[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
         #print(Sys.time() - t1)
-        cell_ids <- data[[input$assay_2]]$col.attrs$CellID[]
+        cell_ids <- colnames(assay_matrices[[input$assay_2]])
         #print(Sys.time() - t1)
         cols <- unlist(lapply(cells[,1], function(x){
           grep(x ,cell_ids, fixed = TRUE)
@@ -396,11 +405,12 @@ server <- function(input, output, session){
         if(!is.null(cells)){
           y[cols] <- 'Selected'
         }
-        exp_mat <- t(Matrix::Matrix(data[[input$assay_2]]$matrix[,], sparse = TRUE))
-        colnames(exp_mat) <- cell_ids
-        rownames(exp_mat) <- data[[input$assay_2]]$row.attrs$features[]
-        #t <- as.data.frame(top_markers(wilcoxauc(X = exp_mat, y = y), n = 10))[1:10,]
-        t <- as.data.frame(wilcoxauc(X = exp_mat, y = y))
+        #print(str(assay_matrices[[input$assay_2]]))
+        #print(Sys.time() - t1)
+        #print(str(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)))
+        #print(unique(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)$group))
+        #t <- as.data.frame(top_markers(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y), n = 10))[1:10,]
+        t <- as.data.frame(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y))
         t <- t[-c(5,6)]
         t$Specificity <- t$pct_in/(t$pct_out+1)
         #print(Sys.time() - t1)
