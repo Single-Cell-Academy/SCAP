@@ -45,7 +45,13 @@ server <- function(input, output, session){
   
   options(shiny.maxRequestSize=500*1024^2)
   
-  volumes <- c(projects = "/home/joel/SCAP/test_data/projects/") #getVolumes()
+  ## Determine folders for ShinyDir button
+  #volumes <- c(projects = "/home/joel/SCAP/test_data/projects/) #getVolumes()
+  volumes <- c("FTP" = "/ftp",
+               Home = fs::path_home(),
+	       "test" = "/home/florian")
+
+  ## Source functions
   source("SCAP_functions.R")
   
   # import data
@@ -57,7 +63,23 @@ server <- function(input, output, session){
     }
   })
   
-  shinyDirChoose(input, "directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
+  #shinyDirChoose(input, "directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
+
+  ## GenAP2 logo
+    output$genap_logo <- renderImage({
+
+    # Return a list containing the filename
+    list(src = "./img/GenAP_powered_reg.png",
+         contentType = 'image/png',
+         width = "100%",
+         height = "100%",
+         alt = "This is alternate text")
+  }, deleteFile = FALSE)
+
+  ## File directory
+  shinyDirChoose(input, "directory",
+                 roots = volumes,
+                 restrictions = system.file(package = "base"))
   
   # connect to .loom files in chosen dir
   data <- NULL

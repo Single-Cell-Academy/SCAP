@@ -43,6 +43,10 @@ ui <- navbarPage(
               ) #/ HTML
             ) #/ style
           ), #/ head
+	       tags$head(tags$style(
+		type="text/css",
+		"#image img {max-width: 100%; width: auto; height: auto}")
+	       ),
           tags$table(
             id = 'inputs-table',
             style = "width: 100%",
@@ -61,6 +65,11 @@ ui <- navbarPage(
             )
           )
         ),
+	       
+	column(12, align="center",
+	       imageOutput("genap_logo", height = "80%")
+	       ),
+
         column(
           width = 4, 
           uiOutput('assay_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
