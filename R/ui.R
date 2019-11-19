@@ -65,10 +65,12 @@ ui <- navbarPage(
             )
           )
         ),
-	       
-	column(12, align="center",
-	       imageOutput("genap_logo", height = "80%")
-	       ),
+	conditionalPanel(
+		  condition = "!input.assay_1",	 
+		column(12, align="center",
+	       		imageOutput("genap_logo", height = "80%")
+	       		)
+		),
 
         column(
           width = 4, 
