@@ -148,7 +148,7 @@ seuratToLoom <- function(obj, dir){
   
   assays <- names(seur@assays)
   
-  if(length(assays > 1)){
+  if(length(assays)>1){
     dims <- lapply(seur@assays, function(x){
       return(dim(x@data))
     })
