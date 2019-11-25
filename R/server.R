@@ -18,17 +18,35 @@
 #' @import shinyjqui
 #' @import shinythemes
 #' @import rjson
+
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("ggthemes")
+library("gtools")
+library("loomR")
+library("hdf5r")
+library("Matrix")
+library("MODIS")
+library("plotly")
+library("presto")
+library("Seurat")
+library("rjson")
+library("shiny")
+library("shinycssloaders")
+library("shinyFiles")
+library("shinyjqui")
+library("shinythemes")
+library("parallel")
+
 server <- function(input, output, session){
   
   session$onSessionEnded(stopApp)
   
-  # set working dir and source required functions
   options(shiny.maxRequestSize=500*1024^2)
-  # currently requires manual changing to conform with users file system...should be fixed.
-  # setwd("/Users/jsjoyal/Desktop/SCAP/")
   
-  volumes <- getVolumes()#c(projects = './test_data/projects/')
-  #source("./R/SCAP_functions.R")
+  volumes <- c(projects = "/home/joel/SCAP/test_data/projects/") #getVolumes()
+  source("SCAP_functions.R")
   
   # import data
   output$data_used <- renderText({
@@ -40,9 +58,6 @@ server <- function(input, output, session){
   })
   
   shinyDirChoose(input, "directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
-  
-  
-  update.trigger <- makeReactiveTrigger()
   
   # connect to .loom files in chosen dir
   data <- NULL
@@ -58,19 +73,32 @@ server <- function(input, output, session){
     }
     if(is.null(data)) return(NULL)
     names(data) <<- assays
-    update.trigger$depend()
     return(sample(1:10^9,1))
   })
   
   
   # global variables
-  m <- NULL # annotations tab: stores the normalized count matrix as a sparse matrix for speed
   tmp_annotations <- NULL # annotations tab: temporarily stores the custom annonations supplied by the user
   meta_options_old <- NULL # depricated
   cells <- NULL # annotations tab: stores a vector of cell IDs selected by the user (via plotly lasso)
   marker_tables <- list() # annotation tab: stores the tables of top 10 marker features for speed
+  assay_matrices <- list()
   order <- NULL # custom metadata tab: stores the order of slected meta data by which order it was selected, rather than alpha-numerically 
   
+  #-- store tables of top 10 marker features --#
+  #-- and store normalized count matrix in memory for speed --#
+  observeEvent(data_update(), ignoreInit = TRUE, {
+    showModal(modalDialog(p("Initializing data for better performance...This may take a little while."), title = paste0("Getting things set up for ", input$directory[[1]][2])), session = getDefaultReactiveDomain())
+    marker_tables <<- list()
+    for(x in names(data)){
+      assay_matrices[[x]] <<- t(Matrix(data = data[[x]]$matrix[,], sparse = TRUE))
+      rownames(assay_matrices[[x]]) <<- data[[x]]$row.attrs$features[]
+      colnames(assay_matrices[[x]]) <<- data[[x]]$col.attrs$CellID[]
+    }
+    cells <<- NULL
+    removeModal(session = getDefaultReactiveDomain())
+  })
+
   ###==============// MAIN TAB //==============####
   
   #-- select input for Assay --#
@@ -91,7 +119,7 @@ server <- function(input, output, session){
     cols <- names(data[[assay]]$col.attrs)
     grouping_options <- cols[grep('_meta_data$',cols)]
     df <- data[[assay]]$get.attribute.df(attributes = grouping_options)
-    pass <- unlist(lapply(grouping_options, function(x){length(unique(df[,x]))<50}))
+    pass <- unlist(lapply(grouping_options, function(x){length(unique(df[,x]))<100}))
     grouping_options <- grouping_options[which(pass)]
     if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
@@ -144,8 +172,12 @@ server <- function(input, output, session){
         return(x)
       }
     }))
-    choices <- sub("_meta_data$","",choices[grepl('_meta_data$',choices)])
-    radioButtons(inputId = 'split_by', label = 'Choose how to split the data', choices = choices, inline = FALSE)
+    if(is.null(choices)){
+      return("No conditions to split by.")
+    }else{
+      choices <- sub("_meta_data$","",choices[grepl('_meta_data$',choices)])
+      return(radioButtons(inputId = 'split_by', label = 'Choose how to split the data', choices = choices, inline = FALSE))
+    }
   })
   
   #-- dimensional reduction plot coloured by cell groups --#
@@ -229,22 +261,7 @@ server <- function(input, output, session){
   
   
   ###==============// ANNOTATION TAB //==============####
-  
-  #-- store tables of top 10 marker features --#
-  #-- and store normalized count matrix in memory for speed --#
-  observeEvent(data_update(), ignoreInit = TRUE, {
-    showModal(modalDialog(p("Initializing data for better performance...This may take a little while."), title = paste0("Getting things set up for ", input$directory[[1]][2])), session = getDefaultReactiveDomain())
-    marker_tables <<- list()
-    assay_matrices <<- list()
-    for(x in names(data)){
-      assay_matrices[[x]] <<- t(Matrix(data = data[[x]]$matrix[,], sparse = TRUE))
-      rownames(assay_matrices[[x]]) <<- data[[x]]$row.attrs$features[]
-      colnames(assay_matrices[[x]]) <<- data[[x]]$col.attrs$CellID[]
-    }
-    cells <<- NULL
-    removeModal(session = getDefaultReactiveDomain())
-  })
-  
+    
   #-- reactive triggers used by this tab --#
   # triggered when adding custom annotations
   tmp.trigger <- makeReactiveTrigger()
@@ -276,7 +293,7 @@ server <- function(input, output, session){
     cols <- names(data[[assay]]$col.attrs)
     meta_options <- cols[grep('_meta_data$',cols)]
     df <- data[[assay]]$get.attribute.df(attributes = meta_options)
-    pass <- unlist(lapply(meta_options, function(x){length(unique(df[,x]))<50}))
+    pass <- unlist(lapply(meta_options, function(x){length(unique(df[,x]))<100}))
     meta_options <- meta_options[which(pass)]
     if(!is.null(meta_options_old) & (length(meta_options)!=length(meta_options_old))){
       sel <- sub("_meta_data$", "", meta_options[!meta_options%in%meta_options_old])
@@ -346,7 +363,7 @@ server <- function(input, output, session){
   #-- Find the markers for the 1) selected cells compared to all other cells or
   #-- 2) the markers that define each group. Depending on if cells are selected or not
   observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-    output$markers <- renderDataTable({
+    output$markers <- DT::renderDataTable({
       req(data_update())
       req(input$grouping_2)
       grouping <- paste0(input$grouping_2,"_meta_data")
@@ -358,59 +375,28 @@ server <- function(input, output, session){
       }
       group_assay <- paste(input$grouping_2, input$assay_2, sep = '_')
       if(any(group_assay%in%names(marker_tables)) & is.null(cells)){
-        #print('in')
-        #t1 <- Sys.time()
         t <- marker_tables[[group_assay]]
-        #print(Sys.time()-t1)
       }else{
-        #print('not in')
-        #t1 <- Sys.time()
-        #m <- t(data[[input$assay_2]]$matrix[,])
-        #rownames(m) <- data[[input$assay_2]]$row.attrs$features[]
-        #colnames(m) <- data[[input$assay_2]]$col.attrs$CellID[]
         y <- data[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
-        #print(Sys.time() - t1)
         cell_ids <- colnames(assay_matrices[[input$assay_2]])
-        #print(Sys.time() - t1)
         cols <- unlist(lapply(cells[,1], function(x){
           grep(x ,cell_ids, fixed = TRUE)
         }))
-        #print(Sys.time() - t1)
         if(!is.null(cells)){
           y[cols] <- 'Selected'
         }
-        #print(str(assay_matrices[[input$assay_2]]))
-        #print(Sys.time() - t1)
-        #print(str(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)))
-        #print(unique(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y)$group))
         #t <- as.data.frame(top_markers(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y), n = 10))[1:10,]
         t <- as.data.frame(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y))
         t <- t[-c(5,6)]
         t$Specificity <- t$pct_in/(t$pct_out+1)
-        #print(Sys.time() - t1)
         if(is.null(cells)){
           marker_tables[[group_assay]] <<- t
         }
-        #print(Sys.time() - t1)
       }
-      
       if(!is.null(cells)){
-        #print('sel')
-        #t1 <- Sys.time()
         t <- t[which(t$group == "Selected"),]
-        #print(str(t))
-        #print(Sys.time()-t1)
-        #names(t) <- "Markers for Selected Cells"
-      }#else{
-        #t <- t[mixedsort(t$group),]
-        #print(str(t))
-        #index <- 1:ncol(t)
-        #rank <- grep('rank',colnames(t))
-        #index <- index[-rank]
-        #t <- t[,c(rank, index)]
-      #}
-      #print(str(marker_tables))
-      t
+      }
+      t %>% DT::datatable() %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3)
     })
   })
   
@@ -479,8 +465,9 @@ server <- function(input, output, session){
       new <- list(new)
       names(new) <- input$new_scheme_name
       if(!grepl("_meta_data$",names(new))) names(new) <- paste0(names(new),"_meta_data")
-      
-      data[[input$assay_2]]$add.col.attribute(attributes = new, overwrite = TRUE)
+      for(i in 1:length(data)){
+        data[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
+      }
       annot.trigger$trigger()
     }else{
       if(all(tmp_annotations=='unlabled')){
@@ -493,7 +480,9 @@ server <- function(input, output, session){
         if(!grepl("_meta_data$",names(new))){
           names(new) <- paste0(names(new),"_meta_data")
         }
-        data[[input$assay_2]]$add.col.attribute(attributes = new, overwrite = TRUE)
+        for(i in 1:length(data)){
+          data[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
+        } 
         annot.trigger$trigger()
       }
     }
@@ -560,6 +549,7 @@ server <- function(input, output, session){
   output$meta_group_checkbox <- renderUI({
     req(data_update())
     req(input$assay_3)
+    annot.trigger$depend()
     choices <- names(data[[input$assay_3]]$col.attrs)[which(grepl("_meta_data$", names(data[[input$assay_3]]$col.attrs)))]
     choices <- sub('_meta_data','',choices)
     checkboxGroupInput(inputId = 'meta_group_checkbox', label = 'Meta Data', choices = choices)
@@ -626,8 +616,25 @@ server <- function(input, output, session){
       }else{
         names(ex_list) <- input$new_meta_group
       }
-      data[[input$assay_3]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
-      update.trigger$trigger()
+<<<<<<< HEAD
+      for(i in 1:length(data)){
+        data[[i]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
+      }
+      showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after once complete"), session = getDefaultReactiveDomain())
+      Sys.sleep(2)
+      annot.trigger$trigger()
+      removeModal(session = getDefaultReactiveDomain())
+      #update.trigger$trigger()
+=======
+      showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after once complete"), session = getDefaultReactiveDomain())
+      Sys.sleep(2)
+      for(i in 1:length(data)){
+        data[[i]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
+      }
+      annot.trigger$trigger()
+      Sys.sleep(2)
+      removeModal(session = getDefaultReactiveDomain())
+>>>>>>> 44a0f85042c6d72e5fea0f621724be4cb6d369e1
     }
   })
   

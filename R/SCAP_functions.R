@@ -20,6 +20,28 @@
 
 #my.pal <- c(RColorBrewer::brewer.pal(12,'Set3'),RColorBrewer::brewer.pal(12,'Paired'))
 
+library("shiny")
+library("shinycssloaders")
+library("shinyFiles")
+library("shinyjqui")
+library("shinythemes")
+library("cowplot")
+library("dplyr")
+library("ggplot2")
+library("ggthemes")
+library("gtools")
+library("loomR")
+library("hdf5r")
+library("Matrix")
+library("MODIS")
+library("plotly")
+library("presto")
+library("Seurat")
+library("rjson")
+
+
+
+
 save_figure <- function(file_type, file_name, units, height, width, resolution, to_plot){
   if(file_type == "png"){
     png(filename = file_name, units = units, height = height, width = width, res = resolution)
