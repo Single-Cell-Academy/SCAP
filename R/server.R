@@ -64,7 +64,7 @@ server <- function(input, output, session){
   shinyDirChoose(input, "directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
   
   
-  update.trigger <- makeReactiveTrigger()
+  #update.trigger <- makeReactiveTrigger()
   
   # connect to .loom files in chosen dir
   data <- NULL
@@ -80,7 +80,7 @@ server <- function(input, output, session){
     }
     if(is.null(data)) return(NULL)
     names(data) <<- assays
-    update.trigger$depend()
+    #update.trigger$depend()
     return(sample(1:10^9,1))
   })
   
@@ -113,7 +113,7 @@ server <- function(input, output, session){
     cols <- names(data[[assay]]$col.attrs)
     grouping_options <- cols[grep('_meta_data$',cols)]
     df <- data[[assay]]$get.attribute.df(attributes = grouping_options)
-    pass <- unlist(lapply(grouping_options, function(x){length(unique(df[,x]))<50}))
+    pass <- unlist(lapply(grouping_options, function(x){length(unique(df[,x]))<100}))
     grouping_options <- grouping_options[which(pass)]
     if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
@@ -302,7 +302,7 @@ server <- function(input, output, session){
     cols <- names(data[[assay]]$col.attrs)
     meta_options <- cols[grep('_meta_data$',cols)]
     df <- data[[assay]]$get.attribute.df(attributes = meta_options)
-    pass <- unlist(lapply(meta_options, function(x){length(unique(df[,x]))<50}))
+    pass <- unlist(lapply(meta_options, function(x){length(unique(df[,x]))<100}))
     meta_options <- meta_options[which(pass)]
     if(!is.null(meta_options_old) & (length(meta_options)!=length(meta_options_old))){
       sel <- sub("_meta_data$", "", meta_options[!meta_options%in%meta_options_old])
@@ -655,8 +655,14 @@ server <- function(input, output, session){
       }else{
         names(ex_list) <- input$new_meta_group
       }
-      data[[input$assay_3]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
-      update.trigger$trigger()
+      for(i in 1:length(data)){
+        data[[i]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
+      }
+      showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after once complete"), session = getDefaultReactiveDomain())
+      Sys.sleep(2)
+      annot.trigger$trigger()
+      removeModal(session = getDefaultReactiveDomain())
+      #update.trigger$trigger()
     }
   })
   
