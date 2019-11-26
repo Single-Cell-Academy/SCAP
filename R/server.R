@@ -91,6 +91,8 @@ server <- function(input, output, session){
     loom_files <- paste0(path,"/",list.files(path))
     assays <- sub(".loom","",sub(paste0(".*/"),"",loom_files))
     data <- list()
+
+    ## Iterate over all assays and connect to loom objects
     for(i in 1:length(assays)){
       data[[i]] <<- tryCatch({
         loomR::connect(loom_files[i], mode = "r+")
@@ -100,12 +102,12 @@ server <- function(input, output, session){
           return(NULL)
       })
     }
-    if(is.null(data)) return(NULL)
-    if(length(data) != length(assays)) return(NULL)
-    if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
+    # if(is.null(data)) return(NULL)
+    # if(length(data) != length(assays)) return(NULL)
+    # if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <<- assays
     return(sample(1:10^9,1))
-  })
+  }) 
   
   
   # global variables
@@ -114,7 +116,7 @@ server <- function(input, output, session){
   cells <- NULL # annotations tab: stores a vector of cell IDs selected by the user (via plotly lasso)
   marker_tables <- list() # annotation tab: stores the tables of top 10 marker features for speed
   assay_matrices <- list()
-  order <- NULL # custom metadata tab: stores the order of slected meta data by which order it was selected, rather than alpha-numerically 
+  order <- NULL # custom metadata tab: stores the order of selected meta data by which order it was selected, rather than alpha-numerically 
   
   #-- store tables of top 10 marker features --#
   #-- and store normalized count matrix in memory for speed --#
@@ -140,9 +142,10 @@ server <- function(input, output, session){
     }
     selectInput('assay_1', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))
   })
-  
-  #-- select how to group cells --#
-  output$grouping_1 <- renderUI({
+
+  #-- Make the list of available metadata slots for plotting and comparing a reactive value.--#
+  metadata_options <- reactive({
+
     annot.trigger$depend()
     req(data_update())
     req(input$assay_1)
@@ -152,12 +155,25 @@ server <- function(input, output, session){
     df <- data[[assay]]$get.attribute.df(attributes = grouping_options)
     pass <- unlist(lapply(grouping_options, function(x){length(unique(df[,x]))<50}))
     grouping_options <- grouping_options[which(pass)]
+
+    return(grouping_options)
+
+    })
+  
+  #-- select how to group cells --#
+  output$grouping_1 <- renderUI({
+    req(metadata_options())
+
+    grouping_options <- metadata_options()
+    assay <- input$assay_1
+
     if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
     }else{
       sel <- sub("_meta_data","",grouping_options[1])
     }
-    selectInput(inputId = 'grouping_1', label = 'Group By', choices = sub("_meta_data$","",grouping_options), selected = sel, multiple = FALSE)
+
+    selectInput(inputId = 'grouping_1', label = 'Group By', choices = sub("_meta_data$","",metadata_options()), selected = sel, multiple = FALSE)
   })
   
   #-- select the clustering method --#
@@ -296,6 +312,7 @@ server <- function(input, output, session){
   #-- reactive triggers used by this tab --#
   # triggered when adding custom annotations
   tmp.trigger <- makeReactiveTrigger()
+
   # triggered when saving custom annotations
   annot.trigger <- makeReactiveTrigger()
   #
@@ -763,35 +780,50 @@ server <- function(input, output, session){
   #-- Functions for annotation comparison--#
   ####
 
+  ## Make meta data annotations a reactive object instead of performing all of the calles 3 times! 
+
   #-- get the first list of potential annotations from loom--#
   output$comp_anno_list1 <- renderUI({
-    req(data_update())
+    req(metadata_options())
+
+    grouping_options <- metadata_options()
     
     selectInput(
       inputId = 'comp_anno_1', 
-      label = 'Select the genes to plot', 
-      choices = names(data[[assay.in]]$col.attrs), multiple = FALSE)
+      label = 'Select the annotation you want to compare!', 
+      choices = sub("_meta_data$","",metadata_options()), 
+      multiple = FALSE)
   })
   
-  ## List 2 of annotations
+  #-- second list of annotations to compare against--#
   output$comp_anno_list2 <- renderUI({
-    req(all_annotations())
     req(input$comp_anno_1)
+    req(metadata_options())
+    grouping_options <- metadata_options()
+
+    grouping_options <- grouping_options[!grepl(paste(input$comp_anno_1,"_meta_data",sep=""),grouping_options)]
     
     selectInput(
       inputId = 'comp_anno_2', 
-      label = 'Select the genes to plot', 
-      choices = colnames(all_annotations()[,-1]), multiple = FALSE)
-  })
+      label = 'Select the annotation to compare against!', 
+      choices = sub("_meta_data$","",grouping_options), 
+      multiple = FALSE)  })
   
+
+
   sankey_comp <- eventReactive(input$compare_annos, {
-    req(all_annotations())
+    req(data_update())
     req(input$comp_anno_1)
     req(input$comp_anno_2)
 
-    annos_to_compare <- all_annotations()[,c("cell_id",input$comp_anno_1,input$comp_anno_2)]
+    annos_to_compare <- data[[input$assay_1]]$get.attribute.df(
+      attributes=c(
+        "CellID",
+        paste(input$comp_anno_1,"_meta_data",sep=""),
+        paste(input$comp_anno_2,"_meta_data",sep=""))
+    )
 
-    annos_to_compare <- all_annotations()[,c(input$comp_anno_1,input$comp_anno_2)]
+    colnames(annos_to_compare) <- gsub("_meta_data","",colnames(annos_to_compare))
     
     annos_to_compare_stats <- annos_to_compare %>% 
       group_by(get(input$comp_anno_1),get(input$comp_anno_2)) %>%

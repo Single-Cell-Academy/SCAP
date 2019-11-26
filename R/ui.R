@@ -362,6 +362,7 @@ ui <- navbarPage(
       #h1('Stuff Goes Here')
     )
   ),
+
 tabPanel("Compare annotations",icon = icon("compress"),
              
              fluidRow(
@@ -381,13 +382,9 @@ tabPanel("Compare annotations",icon = icon("compress"),
              fluidRow(
                column(12,
                       plotlyOutput("sankey_diagram", height = "auto"))
-             )
-             
-             
-             
+             )     
     )
-  
-)# end ui
+)   # end ui
 #jqui_resizable(jqui_draggable(
 #%>% withSpinner(color="#0dc5c1")
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++#
