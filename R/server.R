@@ -92,9 +92,17 @@ server <- function(input, output, session){
     assays <- sub(".loom","",sub(paste0(".*/"),"",loom_files))
     data <- list()
     for(i in 1:length(assays)){
-      data[[i]] <<- connect(loom_files[i], mode = "r+")
+      data[[i]] <<- tryCatch({
+        loomR::connect(loom_files[i], mode = "r+")
+      },
+        error = function(e){
+          showModal(modalDialog(p(paste0("An error occured trying to connect to ", loom_files[i], ". It is possible that someone else is currently analyzing this file. Please wait for them to finish so your annotations do not conflict.")), title = "Error connecting to loom file."), session = getDefaultReactiveDomain())
+          return(NULL)
+      })
     }
     if(is.null(data)) return(NULL)
+    if(length(data) != length(assays)) return(NULL)
+    if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <<- assays
     return(sample(1:10^9,1))
   })
