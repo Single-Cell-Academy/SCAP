@@ -107,7 +107,7 @@ server <- function(input, output, session){
     # if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <<- assays
     return(sample(1:10^9,1))
-  }) 
+  })
   
   
   # global variables
@@ -143,7 +143,7 @@ server <- function(input, output, session){
     selectInput('assay_1', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))
   })
 
-  #-- Make the list of available metadata slots for plotting and comparing a reactive value.--#
+  #-- Make the list of available metadata slots for plotting and comparing a reactive value--#
   metadata_options <- reactive({
 
     annot.trigger$depend()
@@ -444,7 +444,7 @@ server <- function(input, output, session){
       if(!is.null(cells)){
         t <- t[which(t$group == "Selected"),]
       }
-      t %>% DT::datatable() %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3)
+      t %>% arrange(desc(Specificity)) %>% DT::datatable() %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3)
     })
   })
   
