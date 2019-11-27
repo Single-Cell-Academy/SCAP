@@ -43,6 +43,10 @@ ui <- navbarPage(
               ) #/ HTML
             ) #/ style
           ), #/ head
+	       tags$head(tags$style(
+		type="text/css",
+		"#image img {max-width: 100%; width: auto; height: auto}")
+	       ),
           tags$table(
             id = 'inputs-table',
             style = "width: 100%",
@@ -61,6 +65,13 @@ ui <- navbarPage(
             )
           )
         ),
+	conditionalPanel(
+		  condition = "!input.assay_1",	 
+		column(12, align="center",
+	       		imageOutput("genap_logo", height = "80%")
+	       		)
+		),
+
         column(
           width = 4, 
           uiOutput('assay_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
@@ -350,8 +361,30 @@ ui <- navbarPage(
     mainPanel(
       #h1('Stuff Goes Here')
     )
-  )
-)# end ui
+  ),
+
+tabPanel("Compare annotations",icon = icon("compress"),
+             
+             fluidRow(
+               column(4,
+                      uiOutput("comp_anno_list1")
+                      ),
+               
+               column(4,
+                      uiOutput("comp_anno_list2")
+               ),
+               
+               column(4,
+                      br(),
+                      actionButton("compare_annos","Compare annotations!"))
+             ),
+             
+             fluidRow(
+               column(12,
+                      plotlyOutput("sankey_diagram", height = "auto"))
+             )     
+    )
+)   # end ui
 #jqui_resizable(jqui_draggable(
 #%>% withSpinner(color="#0dc5c1")
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++#

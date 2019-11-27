@@ -45,7 +45,13 @@ server <- function(input, output, session){
   
   options(shiny.maxRequestSize=500*1024^2)
   
-  volumes <- c(projects = "/home/joel/SCAP/test_data/projects/") #getVolumes()
+  ## Determine folders for ShinyDir button
+  #volumes <- c(projects = "/home/joel/SCAP/test_data/projects/) #getVolumes()
+  volumes <- c("FTP" = "/ftp",
+               Home = fs::path_home(),
+	       "test" = "/home/florian")
+
+  ## Source functions
   source("SCAP_functions.R")
   
   # import data
@@ -57,7 +63,24 @@ server <- function(input, output, session){
     }
   })
   
-  shinyDirChoose(input, "directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
+  # Old specification of directories
+  #shinyDirChoose(input, "directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
+
+  ## GenAP2 logo
+    output$genap_logo <- renderImage({
+
+    # Return a list containing the filename
+    list(src = "./img/GenAP_powered_reg.png",
+         contentType = 'image/png',
+         width = "100%",
+         height = "100%",
+         alt = "This is alternate text")
+  }, deleteFile = FALSE)
+
+  ## File directory
+  shinyDirChoose(input, "directory",
+                 roots = volumes,
+                 restrictions = system.file(package = "base"))
   
   # connect to .loom files in chosen dir
   data <- NULL
@@ -67,7 +90,9 @@ server <- function(input, output, session){
     if(identical(path, character(0))) return(NULL)
     loom_files <- paste0(path,"/",list.files(path))
     assays <- sub(".loom","",sub(paste0(".*/"),"",loom_files))
-    data <<- list()
+    data <- list()
+
+    ## Iterate over all assays and connect to loom objects
     for(i in 1:length(assays)){
       data[[i]] <<- tryCatch({
         loomR::connect(loom_files[i], mode = "r+")
@@ -77,9 +102,9 @@ server <- function(input, output, session){
           return(NULL)
       })
     }
-    if(is.null(data)) return(NULL)
-    if(length(data) != length(assays)) return(NULL)
-    if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
+    # if(is.null(data)) return(NULL)
+    # if(length(data) != length(assays)) return(NULL)
+    # if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <<- assays
     return(sample(1:10^9,1))
   })
@@ -91,7 +116,7 @@ server <- function(input, output, session){
   cells <- NULL # annotations tab: stores a vector of cell IDs selected by the user (via plotly lasso)
   marker_tables <- list() # annotation tab: stores the tables of top 10 marker features for speed
   assay_matrices <- list()
-  order <- NULL # custom metadata tab: stores the order of slected meta data by which order it was selected, rather than alpha-numerically 
+  order <- NULL # custom metadata tab: stores the order of selected meta data by which order it was selected, rather than alpha-numerically 
   
   #-- store tables of top 10 marker features --#
   #-- and store normalized count matrix in memory for speed --#
@@ -117,9 +142,10 @@ server <- function(input, output, session){
     }
     selectInput('assay_1', "Select Assay", choices = names(data), selected = ifelse(any(names(data)=="RNA"),yes = "RNA",no = names(data)[1]))
   })
-  
-  #-- select how to group cells --#
-  output$grouping_1 <- renderUI({
+
+  #-- Make the list of available metadata slots for plotting and comparing a reactive value--#
+  metadata_options <- reactive({
+
     annot.trigger$depend()
     req(data_update())
     req(input$assay_1)
@@ -129,12 +155,25 @@ server <- function(input, output, session){
     df <- data[[assay]]$get.attribute.df(attributes = grouping_options)
     pass <- unlist(lapply(grouping_options, function(x){length(unique(df[,x]))<50}))
     grouping_options <- grouping_options[which(pass)]
+
+    return(grouping_options)
+
+    })
+  
+  #-- select how to group cells --#
+  output$grouping_1 <- renderUI({
+    req(metadata_options())
+
+    grouping_options <- metadata_options()
+    assay <- input$assay_1
+
     if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
     }else{
       sel <- sub("_meta_data","",grouping_options[1])
     }
-    selectInput(inputId = 'grouping_1', label = 'Group By', choices = sub("_meta_data$","",grouping_options), selected = sel, multiple = FALSE)
+
+    selectInput(inputId = 'grouping_1', label = 'Group By', choices = sub("_meta_data$","",metadata_options()), selected = sel, multiple = FALSE)
   })
   
   #-- select the clustering method --#
@@ -273,6 +312,7 @@ server <- function(input, output, session){
   #-- reactive triggers used by this tab --#
   # triggered when adding custom annotations
   tmp.trigger <- makeReactiveTrigger()
+
   # triggered when saving custom annotations
   annot.trigger <- makeReactiveTrigger()
   #
@@ -404,7 +444,7 @@ server <- function(input, output, session){
       if(!is.null(cells)){
         t <- t[which(t$group == "Selected"),]
       }
-      t %>% DT::datatable() %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3)
+      t %>% arrange(desc(Specificity)) %>% DT::datatable() %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3)
     })
   })
   
@@ -735,5 +775,109 @@ server <- function(input, output, session){
     }
   })
   
+
+  ####
+  #-- Functions for annotation comparison--#
+  ####
+
+  ## Make meta data annotations a reactive object instead of performing all of the calles 3 times! 
+
+  #-- get the first list of potential annotations from loom--#
+  output$comp_anno_list1 <- renderUI({
+    req(metadata_options())
+
+    grouping_options <- metadata_options()
+    
+    selectInput(
+      inputId = 'comp_anno_1', 
+      label = 'Select the annotation you want to compare!', 
+      choices = sub("_meta_data$","",metadata_options()), 
+      multiple = FALSE)
+  })
+  
+  #-- second list of annotations to compare against--#
+  output$comp_anno_list2 <- renderUI({
+    req(input$comp_anno_1)
+    req(metadata_options())
+    grouping_options <- metadata_options()
+
+    grouping_options <- grouping_options[!grepl(paste(input$comp_anno_1,"_meta_data",sep=""),grouping_options)]
+    
+    selectInput(
+      inputId = 'comp_anno_2', 
+      label = 'Select the annotation to compare against!', 
+      choices = sub("_meta_data$","",grouping_options), 
+      multiple = FALSE)  })
+  
+
+
+  sankey_comp <- eventReactive(input$compare_annos, {
+    req(data_update())
+    req(input$comp_anno_1)
+    req(input$comp_anno_2)
+
+    annos_to_compare <- data[[input$assay_1]]$get.attribute.df(
+      attributes=c(
+        "CellID",
+        paste(input$comp_anno_1,"_meta_data",sep=""),
+        paste(input$comp_anno_2,"_meta_data",sep=""))
+    )
+
+    colnames(annos_to_compare) <- gsub("_meta_data","",colnames(annos_to_compare))
+    
+    annos_to_compare_stats <- annos_to_compare %>% 
+      group_by(get(input$comp_anno_1),get(input$comp_anno_2)) %>%
+      tally() %>%
+      ungroup()
+    
+    colnames(annos_to_compare_stats) <- c("anno1","anno2","n")
+    
+    annos_to_compare_stats <- annos_to_compare_stats %>%
+      mutate("anno1" = paste(anno1,input$comp_anno_1,sep="_")) %>%
+      mutate("anno2" = paste(anno2,input$comp_anno_2,sep="_"))
+    
+    joined_annos <- c(annos_to_compare_stats$anno1,annos_to_compare_stats$anno2)
+    joined_annos <- unique(joined_annos)
+    
+    annos_to_compare_stats$IDsource=match(annos_to_compare_stats$anno1, joined_annos)-1 
+    annos_to_compare_stats$IDtarget=match(annos_to_compare_stats$anno2, joined_annos)-1
+
+    return(annos_to_compare_stats)
+    })
+  
+
+
+  ## Sankey diagram to compare two annotations
+  output$sankey_diagram <- renderPlotly({
+    req(sankey_comp())
+    
+    joined_annos <- c(sankey_comp()$anno1,sankey_comp()$anno2)
+    joined_annos <- unique(joined_annos)
+    
+    p <- plot_ly(
+      type = "sankey",
+      orientation = "h",
+      
+      node = list(
+        label = joined_annos,
+        pad = 15,
+        thickness = 20,
+        line = list(
+          color = "black",
+          width = 0.5
+        )
+      ),
+      
+      link = list(
+        source = sankey_comp()$IDsource,
+        target = sankey_comp()$IDtarget,
+        value =  sankey_comp()$n
+      )
+    )
+
+
+
+    }
+  )
   
 } # server end
