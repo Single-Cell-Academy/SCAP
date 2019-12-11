@@ -48,9 +48,7 @@ server <- function(input, output, session){
   ## Determine folders for ShinyDir button
   #volumes <- c(projects = "/home/joel/SCAP/test_data/projects/) #getVolumes()
   volumes <- c("FTP" = "/ftp",
-               Home = fs::path_home(),
-	       "test" = "/home/florian",
-	       "joel" = "/home/joel/SCAP")
+               Home = fs::path_home())
 
   ## Source functions
   source("SCAP_functions.R")
