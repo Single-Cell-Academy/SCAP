@@ -49,7 +49,8 @@ server <- function(input, output, session){
   #volumes <- c(projects = "/home/joel/SCAP/test_data/projects/) #getVolumes()
   volumes <- c("FTP" = "/ftp",
                Home = fs::path_home(),
-	       "test" = "/home/florian")
+	       "test" = "/home/florian",
+	       "joel" = "/home/joel/SCAP")
 
   ## Source functions
   source("SCAP_functions.R")
@@ -215,7 +216,7 @@ server <- function(input, output, session){
     req(data_update())
     req(input$assay_1)
     choices <- unlist(lapply(names(data[[input$assay_1]]$col.attrs), function(x){
-      if(length(unique(data[[input$assay_1]]$col.attrs[[x]][]))==2){
+      if(length(unique(data[[input$assay_1]]$col.attrs[[x]][]))>1){
         return(x)
       }
     }))
@@ -677,15 +678,17 @@ server <- function(input, output, session){
   
   ###==============// FILE CONVERSION TAB //==============####
   
-  shinyFileChoose(input, "object_file", roots = getVolumes(), session = session)
+  shinyFileChoose(input, "object_file", roots = volumes, session = session)
   shinyDirChoose(input, "new_directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
   
-  output$chosen_object_file <- renderText(parseFilePaths(selection = input$object_file, roots = getVolumes())$datapath)
+  output$chosen_object_file <- renderText(parseFilePaths(selection = input$object_file, roots = volumes)$datapath)
   
   output$chosen_new_directory <- renderText(parseDirPath(roots = volumes, selection = input$new_directory))
   
   observeEvent(input$object_file, ignoreInit = T, ignoreNULL = T, {
-    file_path <- parseFilePaths(selection = input$object_file, roots = getVolumes())$datapath
+    print(input$object_file)
+    message(input$object_file)
+    file_path <- parseFilePaths(selection = input$object_file, roots = volumes)$datapath
     if(identical(file_path,character(0))){
       return(NULL)
     }
@@ -713,7 +716,7 @@ server <- function(input, output, session){
       return(NULL)
     }
     
-    file_path <- parseFilePaths(selection = input$object_file, roots = getVolumes())$datapath
+    file_path <- parseFilePaths(selection = input$object_file, roots = volumes)$datapath
     
     if(!grepl('\\.rds$', file_path, ignore.case = T)){
       showNotification('The selected file must be of type .rds', type = 'error')
@@ -730,10 +733,10 @@ server <- function(input, output, session){
     }
   })
   
-  shinyFileChoose(input, "update_file", roots = getVolumes(), session = session)
+  shinyFileChoose(input, "update_file", roots = volumes, session = session)
   shinyDirChoose(input, "new_directory_2", roots = volumes, session = session, restrictions = system.file(package = "base"))
   
-  output$chosen_update_file <- renderText(parseFilePaths(selection = input$update_file, roots = getVolumes())$datapath)
+  output$chosen_update_file <- renderText(parseFilePaths(selection = input$update_file, roots = volumes)$datapath)
   
   output$chosen_new_directory_2 <- renderText(parseDirPath(roots = volumes, selection = input$new_directory_2))
   
@@ -749,7 +752,7 @@ server <- function(input, output, session){
       return(NULL)
     }
     dir_path <- parseDirPath(roots = volumes, selection = input$new_directory_2)
-    path_to_seurat <- parseFilePaths(selection = input$update_file, roots = getVolumes())$datapath
+    path_to_seurat <- parseFilePaths(selection = input$update_file, roots = volumes)$datapath
     
     if(input$overwrite == "no"){
       file <- input$new_file_name
