@@ -135,6 +135,11 @@ seuratToLoom <- function(obj, dir){
       seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^MT-')
     }else if(any(grepl('^mt-', rownames(seur)))){
       seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^mt-')
+    }else if(any(grepl("^Mt-", rownames(seur)))){
+      seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^Mt-')
+    }else{
+      seur$percent.mito <- 0
+      showNotification(paste0("Mitochondrial genes were not identified."), type = 'warning')
     }
   }
   
