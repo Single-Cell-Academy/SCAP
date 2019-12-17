@@ -443,7 +443,7 @@ server <- function(input, output, session){
       if(!is.null(cells)){
         t <- t[which(t$group == "Selected"),]
       }
-      t %>% arrange(desc(Specificity)) %>% DT::datatable() %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3)
+      t %>% arrange(desc(Specificity)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3)
     })
   })
   
