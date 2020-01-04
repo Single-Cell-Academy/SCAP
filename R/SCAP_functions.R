@@ -772,8 +772,6 @@ split_dot_plot <- function(data,
   data.plot$split <- as.factor(data.plot$split)
   
   data.plot$id <- reorder_levels(data.plot$id)
-  #print('data.plot')
-  #print(str(data.plot))
   
   labels <- data.frame(features.plot = rep(levels(data.plot$features.plot),length(levels(data.plot$split))))
   labels$id <- rep(levels(data.plot$id)[length(levels(data.plot$id))], nrow(labels))
@@ -784,8 +782,6 @@ split_dot_plot <- function(data,
   labels$id <- as.factor(labels$id)
   labels$split <- as.factor(labels$split)
   labels$y <- as.factor('ZZZZZZ') #length(levels(data.plot$id))+1
-  #print('labels:')
-  #print(labels)
   
   p <- ggplot(data = data.plot, mapping = aes(x = features.plot, y = id)) + 
     geom_point(aes(color = avg.exp.scaled, size = pct.exp, group = split), position = position_dodge(1))  +
