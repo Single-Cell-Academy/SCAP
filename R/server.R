@@ -165,7 +165,7 @@ server <- function(input, output, session){
     options <- names(loom_data()[[assay]]$col.attrs)
     l.assay <- tolower(assay)
     reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
-    selectInput(inputId = 'reduction_1', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
+    selectInput(inputId = 'reduction_1', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('umap_',l.assay,'_2d')), yes = paste0('umap_',l.assay,'_2d'), no = reductions[1]))
   })
   
   #-- select the featutres for the feature plot --#
@@ -312,7 +312,7 @@ server <- function(input, output, session){
     options <- names(loom_data()[[assay]]$col.attrs)[grep("_2d",names(loom_data()[[assay]]$col.attrs))]
     l.assay <- tolower(assay)
     reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
-    selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
+    selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('umap_',l.assay,'_2d')), yes = paste0('umap_',l.assay,'_2d'), no = reductions[1]))
   })
   
   #-- select the featutres for the feature plot --#
