@@ -877,10 +877,12 @@ server <- function(input, output, session){
     ## Read in data matrix in X chunks and predict each junk, then stitch them
     ## back together at the end
     assay <- input$assay_1
-    ## For big datasets, for now only load 20% of the data into RAM
+    
+    ## For big datasets, split cell vector into chunks of ~ 2000 cells
     cell_number <- length(loom_data()[[assay]][["col_attrs/CellID"]][])
     sub_vector <- 1:cell_number
-    chunk_list <- split(sub_vector, sort(sub_vector%%10))
+    n_chunks <- round(cell_number/2000,0)
+    chunk_list <- split(sub_vector, sort(sub_vector%%n_chunks))
     chunk_no <- 1
     
     for(chunk in chunk_list){
