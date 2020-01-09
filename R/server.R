@@ -853,47 +853,60 @@ server <- function(input, output, session){
       theme(legend.position = "none")
   })
   
-  #### Reactive values
-  
-  ## reactive value for data matrix used in scPred predictions
-  scpred_test_matrix <- reactive({
-    req(input$assay_1)
-    req(loom_data())
-    assay <- input$assay_1
-    ## For big datasets, for now only load 20% of the data into RAM
-    cell_number <- as.integer(round(length(loom_data()[["col_attrs/CellID"]][]) *0.2,0))
-    data_matrix <- as(t(loom_data()[[assay]]$matrix[,]),"dgCMatrix")
-    gene.names <- loom_data()[[assay]][["row_attrs/features"]][]
-    rownames(data_matrix) <- gene.names
-    
-    return(data_matrix)
-  })
-  
   ## Perform predictions when user clicks button
   predictions_results <- eventReactive(input$predict_cells ,{
     ## Run prediction with the dataset selected
-    req(scpred_test_matrix())
+    req(input$assay_1)
+    req(loom_data())
     req(input$scpred_data)
     req(input$scpred_species)
     req(show_datasets())
+    
+    showModal(modalDialog(p(paste0("Running scPred prediction on your data...")), 
+                          title = "This window will close once prediction is done! This can take a while depending on the size of your dataset!"), session = getDefaultReactiveDomain())
+    Sys.sleep(2)
+    
+    ## Instantiate full prediction table
+    all_predictions <- data.frame()
     
     ## Get scPred model
     dataset <- gsub(" ","_",input$scpred_data)
     dataset_list <- show_datasets()
     scp <- readRDS(dataset_list[[dataset]][1])
     
-    ## Do prediction
-    scp <- scPredict(scp, newData = scpred_test_matrix(), threshold = input$pred_threshold)
+    ## Read in data matrix in X chunks and predict each junk, then stitch them
+    ## back together at the end
+    assay <- input$assay_1
+    ## For big datasets, for now only load 20% of the data into RAM
+    cell_number <- length(loom_data()[[assay]][["col_attrs/CellID"]][])
+    sub_vector <- 1:cell_number
+    chunk_list <- split(sub_vector, sort(sub_vector%%10))
+    chunk_no <- 1
     
-    # Return prediction results
-    predictions <- getPredictions(scp)
-    
+    for(chunk in chunk_list){
+      chunk_no <- chunk_no + 1
+      data_matrix <- as(t(loom_data()[[assay]]$matrix[chunk[1]:tail(chunk,n=1),]),"dgCMatrix")
+      gene.names <- loom_data()[[assay]][["row_attrs/features"]][]
+      rownames(data_matrix) <- gene.names
+      
+      ## Do prediction
+      scp <- scPredict(scp, newData = data_matrix, threshold = input$pred_threshold)
+      # Return prediction results
+      predictions <- getPredictions(scp)
+      rm(data_matrix)
+  
+      # add prediction to full results
+      all_predictions <- rbind(all_predictions,predictions)
+    }
+
     ## Free up ram
     rm(scp)
     
-    return(predictions)
+    Sys.sleep(2)
+    removeModal(session = getDefaultReactiveDomain())
+    
+    return(all_predictions)
   })
-  
   
   output$add_predictions_button <- renderUI({
     req(loom_data())

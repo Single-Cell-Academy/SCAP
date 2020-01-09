@@ -388,10 +388,8 @@ tabPanel("scPred",
 
                # # Info box containing information about the selected dataset
                br(),
+               br(),
                uiOutput("add_predictions_button"),
-               br(),
-               br(),
-               tableOutput("predictions_table"),
                br(),
                br(),
                plotOutput("predictions_plot")
