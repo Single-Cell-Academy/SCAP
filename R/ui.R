@@ -24,10 +24,13 @@ library("plotly")
 library("presto")
 library("Seurat")
 library("rjson")
+
 ui <- navbarPage(
+  
   fluid = TRUE,
   theme = shinytheme('cosmo'),
   title = "Single Cell Analysis Portal",
+  
   tabPanel(
     "Main",
     value = 'main',
@@ -362,6 +365,39 @@ ui <- navbarPage(
       #h1('Stuff Goes Here')
     )
   ),
+  
+tabPanel("scPred",
+           conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
+           conditionalPanel(
+             condition = 'input.assay_1',
+             sidebarPanel(
+               h3("Project your cells unto a dataset:",align="left"),
+               selectInput(inputId="scpred_species", label="Choose a species!",
+                           choices=c("Mouse","Human"),
+                           selected="Mouse", multiple=FALSE, selectize=FALSE),
+
+               uiOutput("scpred_data_list"),
+               sliderInput("pred_threshold", label = "Choose your prediction threshold:",
+                           0, 1,
+                           value = 0.9, step = 0.01),
+               uiOutput("predict_cells_button")
+             ),
+
+             # Show a plot of the generated distribution
+             mainPanel(
+
+               # # Info box containing information about the selected dataset
+               br(),
+               uiOutput("add_predictions_button"),
+               br(),
+               br(),
+               tableOutput("predictions_table"),
+               br(),
+               br(),
+               plotOutput("predictions_plot")
+               )
+             )
+           ), # end of tabPanel
 
 tabPanel("Compare annotations",icon = icon("compress"),
              
@@ -369,11 +405,9 @@ tabPanel("Compare annotations",icon = icon("compress"),
                column(4,
                       uiOutput("comp_anno_list1")
                       ),
-               
                column(4,
                       uiOutput("comp_anno_list2")
                ),
-               
                column(4,
                       br(),
                       actionButton("compare_annos","Compare annotations!"))
@@ -383,8 +417,11 @@ tabPanel("Compare annotations",icon = icon("compress"),
                column(12,
                       plotlyOutput("sankey_diagram", height = "auto"))
              )     
-    )
+         )
+
 )   # end ui
+
+
 #jqui_resizable(jqui_draggable(
 #%>% withSpinner(color="#0dc5c1")
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++#

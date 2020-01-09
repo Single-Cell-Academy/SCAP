@@ -18,6 +18,7 @@
 #' @import shinyjqui
 #' @import shinythemes
 #' @import rjson
+#' @import scPred
 
 library("cowplot")
 library("dplyr")
@@ -38,6 +39,15 @@ library("shinyFiles")
 library("shinyjqui")
 library("shinythemes")
 library("parallel")
+library("scPred")
+
+#### Variables that persist across sessions
+## Mouse datasets for scPred
+scpred_datasets_mouse <- list("/ftp/scpred_datasets/Mouse.Tabula_Muris.Heart.10x_droplet.scpred_model.rds")
+names(scpred_datasets_mouse) <- c("Tabula_Muris_Heart")
+## Mouse datasets for scPred
+scpred_datasets_human <- list("/ftp/scpred_datasets/scPred_testdata_scp.rds")
+names(scpred_datasets_human) <- c("Test")
 
 server <- function(input, output, session){
   session$onSessionEnded(stopApp)
@@ -168,7 +178,7 @@ server <- function(input, output, session){
     selectInput(inputId = 'reduction_1', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('umap_',l.assay,'_2d')), yes = paste0('umap_',l.assay,'_2d'), no = reductions[1]))
   })
   
-  #-- select the featutres for the feature plot --#
+  #-- select the features for the feature plot --#
   output$featureplot_1_feature.select<- renderUI({
     req(input$assay_1)
     assay <- input$assay_1
@@ -574,7 +584,7 @@ server <- function(input, output, session){
       }else{
         names(ex_list) <- input$new_meta_group
       }
-      showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after once complete"), session = getDefaultReactiveDomain())
+      showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after completion"), session = getDefaultReactiveDomain())
       Sys.sleep(2)
       for(i in 1:length(loom_data())){
         loom_data()[[i]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
@@ -756,7 +766,7 @@ server <- function(input, output, session){
     })
   
 
-
+  #### Compare annotations elements
   ## Sankey diagram to compare two annotations
   output$sankey_diagram <- renderPlotly({
     req(sankey_comp())
@@ -785,9 +795,134 @@ server <- function(input, output, session){
       )
     )
 
-
-
+    }) # sankey_diagram end
+  
+  #### scPred #### 
+  ## Controls for scPred prediction panel
+  show_datasets <- reactive({
+    selected_species <- input$scpred_species
+    if(selected_species == "Mouse"){
+      show_datasets <- scpred_datasets_mouse
+    }else if(selected_species == "Human"){
+      show_datasets <- scpred_datasets_human
     }
-  )
+    return(show_datasets)
+  })
+  
+  ## This output will hold the different datasets for the selected species
+  output$scpred_data_list <- renderUI({
+    req(input$scpred_species)
+    
+    selectInput(
+      inputId = 'scpred_data', 
+      label = 'Select a dataset!', 
+      choices = gsub("_"," ",names(show_datasets())), 
+      multiple = FALSE)
+  })
+  
+  ## Button to start prediction
+  output$predict_cells_button <- renderUI({
+    req(loom_data())
+    actionButton("predict_cells", "Predict cell types!")
+  })
+  
+  ## Top of the predictions table
+  output$predictions_table <- renderTable({
+    req(predictions_results())
+    
+    head(predictions_results())
+    
+  })
+  
+  ## Plot a barplot representing how many cells were assigned to which classes
+  output$predictions_plot <- renderPlot({
+    req(predictions_results())
+    req(input$pred_threshold)
+    req(input$scpred_data)
+    
+    predictions_results_tr <- predictions_results() %>%
+      group_by(predClass) %>%
+      tally()
+    
+    ggplot(predictions_results_tr,aes(predClass,n,fill = predClass)) +
+      geom_bar(stat="identity") +
+      theme_cowplot() +
+      labs(x = "Predicted cell types",
+           y = "n",
+           title = paste("Dataset:",input$scpred_data,sep="")) +
+      theme(legend.position = "none")
+  })
+  
+  #### Reactive values
+  
+  ## reactive value for data matrix used in scPred predictions
+  scpred_test_matrix <- reactive({
+    req(input$assay_1)
+    req(loom_data())
+    assay <- input$assay_1
+    ## For big datasets, for now only load 20% of the data into RAM
+    cell_number <- as.integer(round(length(loom_data()[["col_attrs/CellID"]][]) *0.2,0))
+    data_matrix <- as(t(loom_data()[[assay]]$matrix[,]),"dgCMatrix")
+    gene.names <- loom_data()[[assay]][["row_attrs/features"]][]
+    rownames(data_matrix) <- gene.names
+    
+    return(data_matrix)
+  })
+  
+  ## Perform predictions when user clicks button
+  predictions_results <- eventReactive(input$predict_cells ,{
+    ## Run prediction with the dataset selected
+    req(scpred_test_matrix())
+    req(input$scpred_data)
+    req(input$scpred_species)
+    req(show_datasets())
+    
+    ## Get scPred model
+    dataset <- gsub(" ","_",input$scpred_data)
+    dataset_list <- show_datasets()
+    scp <- readRDS(dataset_list[[dataset]][1])
+    
+    ## Do prediction
+    scp <- scPredict(scp, newData = scpred_test_matrix(), threshold = input$pred_threshold)
+    
+    # Return prediction results
+    predictions <- getPredictions(scp)
+    
+    ## Free up ram
+    rm(scp)
+    
+    return(predictions)
+  })
+  
+  
+  output$add_predictions_button <- renderUI({
+    req(loom_data())
+    req(predictions_results())
+    actionButton("add_predictions_meta", "Add predictions to metadata!")
+  })
+
+  ## Add predictions to metadata
+  observeEvent(input$add_predictions_meta,{
+    req(predictions_results())
+    req(loom_data())
+
+    new_meta_group <- predictions_results() %>%
+      select(predClass)
+    
+    dataset <- gsub(" " ,"_",input$scpred_data)
+    pred_params_name <- paste("scpred_",dataset,"_",input$pred_threshold,"_meta_data",sep="")
+    colnames(new_meta_group) <- c(pred_params_name)
+    
+    new_meta_group_list <- as.list(new_meta_group) 
+
+    showModal(modalDialog(p(paste0("Adding predictions to meta data...")), title = "This window will close once task is completed!"), session = getDefaultReactiveDomain())
+    Sys.sleep(2)
+    for(i in 1:length(loom_data())){
+      loom_data()[[i]]$add.col.attribute(attributes = new_meta_group_list, overwrite = TRUE)
+    }
+    loom.trigger$trigger()
+    Sys.sleep(2)
+    removeModal(session = getDefaultReactiveDomain())
+  })
   
 } # server end
