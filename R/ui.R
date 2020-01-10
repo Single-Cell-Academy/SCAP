@@ -5,6 +5,7 @@
 #' @import shinyFiles
 #' @import shinyjqui
 #' @import shinythemes
+#' @import dplyr
 
 library("shiny")
 library("shinycssloaders")
@@ -24,6 +25,7 @@ library("plotly")
 library("presto")
 library("Seurat")
 library("rjson")
+library("dplyr")
 
 ui <- navbarPage(
   
@@ -387,11 +389,23 @@ tabPanel("scPred",
              mainPanel(
 
                # # Info box containing information about the selected dataset
-               br(),
+               h1("Explanation"),
+               p("You can use this Panel to predict cell types in your data from published, annotated Datasets.
+                 We have prepared several public datasets from different species (Human, Mouse),
+                 technologies (SMART-seq2,10x) and Organs for you to use. Simply select the type of dataset you 
+                 want to use as a reference in the sidebar on the left. To predict cell types, we are using scPred,
+                 a recently published algorithm that uses scalable vector machines to predict cell types against a model.
+                 To learn more about scPred"),
+               h1("Results"),
+
+               h2("Save predictions:"),
                br(),
                uiOutput("add_predictions_button"),
                br(),
+               h2("Score distributions for predictions:"),
+               plotOutput("predictions_scores"),
                br(),
+               h2("Distribution of predicted cell types:"),
                plotOutput("predictions_plot")
                )
              )

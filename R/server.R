@@ -19,6 +19,8 @@
 #' @import shinythemes
 #' @import rjson
 #' @import scPred
+#' @import data.table
+#' @import tidyr
 
 library("cowplot")
 library("dplyr")
@@ -40,14 +42,13 @@ library("shinyjqui")
 library("shinythemes")
 library("parallel")
 library("scPred")
+library("data.table")
+library("tidyr")
 
 #### Variables that persist across sessions
-## Mouse datasets for scPred
-scpred_datasets_mouse <- list("/ftp/scpred_datasets/Mouse.Tabula_Muris.Heart.10x_droplet.scpred_model.rds")
-names(scpred_datasets_mouse) <- c("Tabula_Muris_Heart")
-## Mouse datasets for scPred
-scpred_datasets_human <- list("/ftp/scpred_datasets/scPred_testdata_scp.rds")
-names(scpred_datasets_human) <- c("Test")
+
+## Read in table with datasets available
+datasets_scpred <- fread("../meta/SCAP_scpred_datasets.tsv")
 
 server <- function(input, output, session){
   session$onSessionEnded(stopApp)
@@ -801,12 +802,12 @@ server <- function(input, output, session){
   ## Controls for scPred prediction panel
   show_datasets <- reactive({
     selected_species <- input$scpred_species
-    if(selected_species == "Mouse"){
-      show_datasets <- scpred_datasets_mouse
-    }else if(selected_species == "Human"){
-      show_datasets <- scpred_datasets_human
-    }
-    return(show_datasets)
+    show_datasets <- subset(datasets_scpred,Species == selected_species)
+    datasets_selected <- show_datasets$SCAP_filename
+    names(datasets_selected) <- paste(datasets_scpred$Dataset,"."
+                                      ,datasets_scpred$Technology,"."
+                                      ,datasets_scpred$Organ,sep="")
+    return(names(datasets_selected))
   })
   
   ## This output will hold the different datasets for the selected species
@@ -816,7 +817,7 @@ server <- function(input, output, session){
     selectInput(
       inputId = 'scpred_data', 
       label = 'Select a dataset!', 
-      choices = gsub("_"," ",names(show_datasets())), 
+      choices = show_datasets(), 
       multiple = FALSE)
   })
   
@@ -842,15 +843,74 @@ server <- function(input, output, session){
     
     predictions_results_tr <- predictions_results() %>%
       group_by(predClass) %>%
-      tally()
+      tally() %>%
+      mutate("percent" = round((n / sum(n))*100,2))
     
     ggplot(predictions_results_tr,aes(predClass,n,fill = predClass)) +
       geom_bar(stat="identity") +
       theme_cowplot() +
       labs(x = "Predicted cell types",
-           y = "n",
+           y = "Number of cells",
            title = paste("Dataset:",input$scpred_data,sep="")) +
-      theme(legend.position = "none")
+      theme(legend.position = "none") +
+      coord_flip() +
+      geom_text(aes(label=paste(percent,"%",sep=""),
+                    fontface=2), position=position_dodge(width=0.9), hjust=-0.2)
+  })
+  
+  ## Plot a barplot representing how many cells were assigned to which classes
+  output$predictions_scores <- renderPlot({
+    req(predictions_results())
+    req(input$pred_threshold)
+    req(input$scpred_data)
+    
+    predictions <- predictions_results()
+    
+    max_ct <- colnames(predictions)[apply(predictions,1,which.max)]
+    predictions$max_cell_type <- max_ct
+    max_ct_summary <- predictions %>%
+      group_by(max_cell_type) %>%
+      tally() %>%
+      arrange(desc(n))
+    
+    predictions$max_cell_type <- factor(predictions$max_cell_type,levels = max_ct_summary$max_cell_type)
+    
+    predictions_trans <- predictions %>%
+      mutate("cell" = rownames(predictions)) %>%
+      gather("predicted_type","score",-predClass,-cell,-max_cell_type) %>%
+      group_by(max_cell_type) %>%
+      arrange(max_cell_type,desc(score)) %>%
+      ungroup()
+    
+    predictions_trans$cell <- factor(predictions_trans$cell,
+                                     levels = unique(predictions_trans$cell))
+    
+    ggplot(predictions_trans,aes(cell,score, fill = predicted_type)) +
+      geom_bar(stat = "identity",position = "fill",
+               width=1) +
+      theme_cowplot() +
+      theme( axis.text.x=element_blank(),
+             axis.ticks.x=element_blank()) +
+      labs(x = "cells",
+           y = "Cell type probability") +
+      geom_hline(yintercept = input$pred_threshold, linetype = 2)
+    
+  })
+
+  filename_scpred <- reactive({
+    req(input$scpred_data)
+    
+    dataset_split <- strsplit(as.character(input$scpred_data),split="\\.")
+    species_sel <- input$scpred_species
+    dataset_sel <- dataset_split[[1]][1]
+    technology_sel <- dataset_split[[1]][2]
+    organ_sel <- dataset_split[[1]][3]
+    file <- subset(datasets_scpred,Species == species_sel &
+                   Dataset == dataset_sel &
+                   Technology == technology_sel &
+                   Organ == organ_sel)
+    
+    return(file$SCAP_filename)
   })
   
   ## Perform predictions when user clicks button
@@ -858,9 +918,7 @@ server <- function(input, output, session){
     ## Run prediction with the dataset selected
     req(input$assay_1)
     req(loom_data())
-    req(input$scpred_data)
-    req(input$scpred_species)
-    req(show_datasets())
+    req(filename_scpred())
     
     showModal(modalDialog(p(paste0("Running scPred prediction on your data...")), 
                           title = "This window will close once prediction is done! This can take a while depending on the size of your dataset!"), session = getDefaultReactiveDomain())
@@ -870,9 +928,9 @@ server <- function(input, output, session){
     all_predictions <- data.frame()
     
     ## Get scPred model
-    dataset <- gsub(" ","_",input$scpred_data)
-    dataset_list <- show_datasets()
-    scp <- readRDS(dataset_list[[dataset]][1])
+    data_dir <- "/ftp/scpred_datasets/"
+    file_test_scpred <- paste(data_dir,filename_scpred(),sep="")
+    scp <- readRDS(file_test_scpred)
     
     ## Read in data matrix in X chunks and predict each junk, then stitch them
     ## back together at the end
@@ -881,7 +939,7 @@ server <- function(input, output, session){
     ## For big datasets, split cell vector into chunks of ~ 2000 cells
     cell_number <- length(loom_data()[[assay]][["col_attrs/CellID"]][])
     sub_vector <- 1:cell_number
-    n_chunks <- round(cell_number/2000,0)
+    n_chunks <- ceiling(cell_number/2000)
     chunk_list <- split(sub_vector, sort(sub_vector%%n_chunks))
     chunk_no <- 1
     
