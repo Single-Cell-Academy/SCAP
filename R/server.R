@@ -838,8 +838,7 @@ server <- function(input, output, session){
   ## Plot a barplot representing how many cells were assigned to which classes
   output$predictions_plot <- renderPlot({
     req(predictions_results())
-    req(input$pred_threshold)
-    req(input$scpred_data)
+    req(scpred_user_dataset())
     
     predictions_results_tr <- predictions_results() %>%
       group_by(predClass) %>%
@@ -851,7 +850,7 @@ server <- function(input, output, session){
       theme_cowplot() +
       labs(x = "Predicted cell types",
            y = "Number of cells",
-           title = paste("Dataset:",input$scpred_data,sep="")) +
+           title = paste("Dataset:", scpred_user_dataset(),sep="")) +
       theme(legend.position = "none") +
       coord_flip() +
       geom_text(aes(label=paste(percent,"%",sep=""),
@@ -861,8 +860,8 @@ server <- function(input, output, session){
   ## Plot a barplot representing how many cells were assigned to which classes
   output$predictions_scores <- renderPlot({
     req(predictions_results())
-    req(input$pred_threshold)
-    req(input$scpred_data)
+    req(scpred_user_threshold())
+    req(scpred_user_dataset())
     
     predictions <- predictions_results()
     
@@ -893,10 +892,12 @@ server <- function(input, output, session){
              axis.ticks.x=element_blank()) +
       labs(x = "cells",
            y = "Cell type probability") +
-      geom_hline(yintercept = input$pred_threshold, linetype = 2)
+      geom_hline(yintercept = scpred_user_threshold(), linetype = 2)
     
   })
 
+  
+  
   filename_scpred <- reactive({
     req(input$scpred_data)
     
@@ -950,7 +951,7 @@ server <- function(input, output, session){
       rownames(data_matrix) <- gene.names
       
       ## Do prediction
-      scp <- scPredict(scp, newData = data_matrix, threshold = input$pred_threshold)
+      scp <- scPredict(scp, newData = data_matrix, threshold = scpred_user_threshold())
       # Return prediction results
       predictions <- getPredictions(scp)
       rm(data_matrix)
@@ -968,6 +969,18 @@ server <- function(input, output, session){
     return(all_predictions)
   })
   
+  ## Send threshold to plot functions
+  scpred_user_threshold <- eventReactive(input$predict_cells ,{
+    req(input$pred_threshold)
+    return(input$pred_threshold)
+  })
+  
+  ## Send dataset to plot functions
+  scpred_user_dataset <- eventReactive(input$predict_cells ,{
+    req(input$scpred_data)
+    return(input$scpred_data)
+  })
+  
   output$add_predictions_button <- renderUI({
     req(loom_data())
     req(predictions_results())
@@ -982,8 +995,8 @@ server <- function(input, output, session){
     new_meta_group <- predictions_results() %>%
       select(predClass)
     
-    dataset <- gsub(" " ,"_",input$scpred_data)
-    pred_params_name <- paste("scpred_",dataset,"_",input$pred_threshold,"_meta_data",sep="")
+    dataset <- gsub(" " ,"_",scpred_user_dataset())
+    pred_params_name <- paste("scpred_",dataset,"_",scpred_user_threshold(),"_meta_data",sep="")
     colnames(new_meta_group) <- c(pred_params_name)
     
     new_meta_group_list <- as.list(new_meta_group) 

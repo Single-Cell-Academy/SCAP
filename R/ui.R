@@ -394,8 +394,9 @@ tabPanel("scPred",
                  We have prepared several public datasets from different species (Human, Mouse),
                  technologies (SMART-seq2,10x) and Organs for you to use. Simply select the type of dataset you 
                  want to use as a reference in the sidebar on the left. To predict cell types, we are using scPred,
-                 a recently published algorithm that uses scalable vector machines to predict cell types against a model.
-                 To learn more about scPred"),
+                 a recently published algorithm that uses scalable vector machines to predict cell types against a pretrained dataset
+                 To learn more about scPred, click this link:"),
+               tags$a(href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1862-5", "scPred Manuscript!"),
                h1("Results"),
 
                h2("Save predictions:"),
