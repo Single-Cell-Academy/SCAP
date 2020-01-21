@@ -76,17 +76,18 @@ ui <- navbarPage(
 	       		imageOutput("genap_logo", height = "80%")
 	       		)
 		),
-
+      ## Dropdown menus on main page
         column(
           width = 4, 
-          uiOutput('assay_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
+          uiOutput('assay_1') #%>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
         ),
         column(
           width = 4,
-          uiOutput('grouping_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
+          uiOutput('grouping_1') #%>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
         )
-      )
+      ) # End of this fluid row
     ),
+	## Panel for Embedding plot and Featureplot
     conditionalPanel(
       condition = 'input.assay_1',
       fluidRow(
@@ -95,7 +96,7 @@ ui <- navbarPage(
           width = 6,
           wellPanel(
             style  = 'background: white;',
-            plotlyOutput('dimplot_1', height = '100%', width = '100%')%>% withSpinner(color="black"),
+            plotlyOutput('dimplot_1', height = '100%', width = '100%')  %>% withSpinner(color="black"),
             uiOutput('reduction_1', style = 'padding: 10px')
           )
         ),
@@ -103,7 +104,7 @@ ui <- navbarPage(
           width = 6,
           wellPanel(
             style  = 'background: white;',
-            plotlyOutput('featureplot_1', height = '100%', width = '100%')%>% withSpinner(color="black"),
+            plotlyOutput('featureplot_1', height = '100%', width = '100%')  %>% withSpinner(color="black"),
             uiOutput('featureplot_1_feature.select', style = 'padding: 10px')
           )
         ),

@@ -47,7 +47,7 @@ library("tidyr")
 
 #### Variables that persist across sessions
 
-## Read in table with datasets available
+## Read in table with datasets available for scPred
 datasets_scpred <- fread("../meta/SCAP_scpred_datasets.tsv")
 
 server <- function(input, output, session){
@@ -105,13 +105,14 @@ server <- function(input, output, session){
         loomR::connect(loom_files[i], mode = "r+")
       },
         error = function(e){
-          showModal(modalDialog(p(paste0("An error occured trying to connect to ", loom_files[i], ". It is possible that someone else is currently analyzing this file. Please wait for them to finish so your annotations do not conflict.")), title = "Error connecting to loom file."), session = getDefaultReactiveDomain())
+          showModal(modalDialog(p(paste0("An error occured trying to connect to ", loom_files[i],
+                                         ". It is possible that someone else is currently analyzing this file. Please wait for them to finish so your annotations do not conflict.")), title = "Error connecting to loom file."), session = getDefaultReactiveDomain())
           return(NULL)
       })
     }
-    # if(is.null(data)) return(NULL)
-    # if(length(data) != length(assays)) return(NULL)
-    # if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
+    if(is.null(data)) return(NULL)
+    if(length(data) != length(assays)) return(NULL)
+    if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <- assays
     return(data)
   })
@@ -132,6 +133,7 @@ server <- function(input, output, session){
     })
 
   
+  ## Florian: What is this variable doing here? Why is it not reactive?
   marker_tables <- list()
   
   #-- and store normalized count matrix in memory for speed --#
@@ -153,7 +155,11 @@ server <- function(input, output, session){
   #-- select input for Assay --#
   output$assay_1 <- renderUI({
     req(loom_data())
-    selectInput('assay_1', "Select Assay", choices = names(loom_data()), selected = ifelse(any(names(loom_data())=="RNA"),yes = "RNA",no = names(loom_data())[1]))
+    selectInput('assay_1', "Select Assay", 
+                choices = names(loom_data()), 
+                selected = ifelse(any(names(loom_data())=="RNA"),
+                                  yes = "RNA",
+                                  no = names(loom_data())[1]))
   })
   
   #-- select how to group cells --#
@@ -218,13 +224,22 @@ server <- function(input, output, session){
   #-- dimensional reduction plot coloured by cell groups --#
   output$dimplot_1 <- renderPlotly({
     req(input$grouping_1, input$reduction_1)
-    dimPlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, annot_panel = "", low.res = 'yes', data = loom_data())
+    dimPlotlyOutput(assay.in = input$assay_1, 
+                    reduc.in = input$reduction_1, 
+                    group.by = input$grouping_1, 
+                    annot_panel = "", 
+                    low.res = 'yes', 
+                    data = loom_data())
   })
   
   #-- dimensional reduction plot coloured by feature expression --#
   output$featureplot_1 <- renderPlotly({
     req(input$featureplot_1_feature.select)
-    featurePlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, feature.in = input$featureplot_1_feature.select, low.res = 'yes', data = loom_data())
+    featurePlotlyOutput(assay.in = input$assay_1, 
+                        reduc.in = input$reduction_1, 
+                        group.by = input$grouping_1, 
+                        feature.in = input$featureplot_1_feature.select, 
+                        low.res = 'yes', data = loom_data())
   })
   
   #-- dot plot for selected feature expression --#
@@ -372,7 +387,7 @@ server <- function(input, output, session){
         return(NULL)
       }
       group_assay <- paste(input$grouping_2, input$assay_2, sep = '_')
-      if(any(group_assay%in%names(marker_tables)) & is.null(cells)){
+      if(any(group_assay %in% names(marker_tables)) & is.null(cells)){
         t <- marker_tables[[group_assay]]
       }else{
         y <- loom_data()[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
@@ -929,7 +944,7 @@ server <- function(input, output, session){
     all_predictions <- data.frame()
     
     ## Get scPred model
-    data_dir <- "/ftp/scpred_datasets/"
+    data_dir <- "/home/florian/reference/"
     file_test_scpred <- paste(data_dir,filename_scpred(),sep="")
     scp <- readRDS(file_test_scpred)
     
