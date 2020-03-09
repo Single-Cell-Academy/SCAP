@@ -33,13 +33,14 @@ ui <- navbarPage(
   theme = shinytheme('cosmo'),
   title = "Single Cell Analysis Portal",
   
+  
+  
   tabPanel(
     "Main",
     value = 'main',
     wellPanel(
       fluidRow(
-        column(
-          width = 4,
+        column(width = 4,
           tags$head(
             tags$style(
               HTML(
@@ -70,6 +71,7 @@ ui <- navbarPage(
             )
           )
         ),
+	## Only show image when no data is loaded!
 	conditionalPanel(
 		  condition = "!input.assay_1",	 
 		column(12, align="center",
@@ -78,7 +80,7 @@ ui <- navbarPage(
 		),
       ## Dropdown menus on main page
         column(
-          width = 4, 
+          width = 4,
           uiOutput('assay_1') #%>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
         ),
         column(
@@ -149,7 +151,7 @@ ui <- navbarPage(
     conditionalPanel(
       condition = 'input.assay_1',
       sidebarPanel(
-        uiOutput('assay_2'),
+        uiOutput('assay_2'), ###! replace by assay_1
         tabsetPanel(
           id = 'annot_panel',
           tabPanel(
