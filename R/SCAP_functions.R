@@ -112,8 +112,14 @@ seuratToLoom <- function(obj, dir){
   #library(loomR)
   #library(hdf5r)
   #library(Seurat)
-  
-  seur <- readRDS(obj)
+ 
+  ## Make sure the object is really .rds before attempting to read it
+  seur <- try(readRDS(obj))
+
+  if(class(seur) == "try-error"){
+    showNotification('Error: The selected file is labeled .rds but is not actually a valid .rds file!', type = 'error')
+    return(0) ## Return failed error code
+  }
   
   if(!grepl('^seurat',class(seur)[1],ignore.case = T)){
     showNotification('Error: The selected object is of class ', class(seur)[1], ' but must be of class Seurat', type = 'error')
