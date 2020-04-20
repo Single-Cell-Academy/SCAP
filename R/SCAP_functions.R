@@ -112,7 +112,14 @@ seuratToLoom <- function(obj, dir){
   #library(loomR)
   #library(hdf5r)
   #library(Seurat)
- 
+
+  ## Check file permissions before attempting to read the file
+  file_access <- file.access(obj, mode = 4)
+  if(file_access == -1){
+	  showNotification('Error: Permission denied! Make sure you have changed file permissions for this object!', type = 'error')
+	  return(0) ## Return failed error code
+  }
+
   ## Make sure the object is really .rds before attempting to read it
   seur <- try(readRDS(obj))
 
