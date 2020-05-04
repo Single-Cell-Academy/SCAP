@@ -112,8 +112,21 @@ seuratToLoom <- function(obj, dir){
   #library(loomR)
   #library(hdf5r)
   #library(Seurat)
-  
-  seur <- readRDS(obj)
+
+  ## Check file permissions before attempting to read the file
+  file_access <- file.access(obj, mode = 4)
+  if(file_access == -1){
+	  showNotification('Error: Permission denied! Make sure you have changed file permissions for this object!', type = 'error')
+	  return(0) ## Return failed error code
+  }
+
+  ## Make sure the object is really .rds before attempting to read it
+  seur <- try(readRDS(obj))
+
+  if(class(seur) == "try-error"){
+    showNotification('Error: The selected file is labeled .rds but is not actually a valid .rds file!', type = 'error')
+    return(0) ## Return failed error code
+  }
   
   if(!grepl('^seurat',class(seur)[1],ignore.case = T)){
     showNotification('Error: The selected object is of class ', class(seur)[1], ' but must be of class Seurat', type = 'error')
@@ -237,6 +250,8 @@ seuratToLoom <- function(obj, dir){
   }
   return(1)
 }
+
+
 
 reorder_levels <- function(x){
   if(!is.factor(x)){
@@ -504,6 +519,18 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
     }
   }
   label_key <- reduc_key(key = toupper(sub("_.*","",reduc.in)))
+  
+  # Set fixed limits so plot doesn't resize when subsetting in plotly. 
+  # Enlarge limits a bit so cells don't fall on the axis lines
+  xrange <- as.numeric(max(plot.data[,1])) - as.numeric(min(plot.data[,1]))
+  yrange <- as.numeric(max(plot.data[,2])) - as.numeric(min(plot.data[,2]))
+  zrange <- as.numeric(max(plot.data[,3])) - as.numeric(min(plot.data[,3]))
+  xlimits <- c((as.numeric(min(plot.data[,1])) - xrange * 0.15),
+               (as.numeric(max(plot.data[,1])) + xrange * 0.15))
+  ylimits <- c((as.numeric(min(plot.data[,2])) - yrange * 0.15),
+               (as.numeric(max(plot.data[,2])) + yrange * 0.15))
+  zlimits <- c((as.numeric(min(plot.data[,3])) - zrange * 0.15),
+               (as.numeric(max(plot.data[,3])) + zrange * 0.15))
   ax.x <- list(
     title = paste0(label_key,"_1"),
     zeroline = FALSE,
@@ -511,7 +538,8 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none'
+    ticks='none',
+    range = c(xlimits[1],xlimits[2])
   )
   ax.y <- list(
     title = paste0(label_key,"_2"),
@@ -520,7 +548,8 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none'
+    ticks='none',
+    range = c(ylimits[1],ylimits[2])
   )
   
   ax.z <- list(
@@ -530,7 +559,8 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none'
+    ticks='none',
+    range = c(zlimits[1],zlimits[2])
   )
   #str(plot.data)
   #print(head(plot.data))
@@ -607,6 +637,15 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
   
   label_key <- reduc_key(key = toupper(sub("_.*","",reduc.in)))
   
+  xrange <- as.numeric(max(plot.data[,1])) - as.numeric(min(plot.data[,1]))
+  yrange <- as.numeric(max(plot.data[,2])) - as.numeric(min(plot.data[,2]))
+  zrange <- as.numeric(max(plot.data[,3])) - as.numeric(min(plot.data[,3]))
+  xlimits <- c((as.numeric(min(plot.data[,1])) - xrange * 0.15),
+               (as.numeric(max(plot.data[,1])) + xrange * 0.15))
+  ylimits <- c((as.numeric(min(plot.data[,2])) - yrange * 0.15),
+               (as.numeric(max(plot.data[,2])) + yrange * 0.15))
+  zlimits <- c((as.numeric(min(plot.data[,3])) - zrange * 0.15),
+               (as.numeric(max(plot.data[,3])) + zrange * 0.15))
   ax.x <- list(
     title = paste0(label_key,"_1"),
     zeroline = FALSE,
@@ -614,7 +653,8 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none'
+    ticks='none',
+    range = c(xlimits[1],xlimits[2])
   )
   ax.y <- list(
     title = paste0(label_key,"_2"),
@@ -623,7 +663,8 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none'
+    ticks='none',
+    range = c(ylimits[1],ylimits[2])
   )
   ax.z <- list(
     title = paste0(label_key,"_3"),
@@ -632,7 +673,8 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none'
+    ticks='none',
+    range = c(zlimits[1],zlimits[2])
   )
   #t4 <- Sys.time()
   if(length(dims) == 2){

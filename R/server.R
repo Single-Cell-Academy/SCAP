@@ -18,6 +18,9 @@
 #' @import shinyjqui
 #' @import shinythemes
 #' @import rjson
+#' @import scPred
+#' @import data.table
+#' @import tidyr
 
 library("cowplot")
 library("dplyr")
@@ -38,6 +41,14 @@ library("shinyFiles")
 library("shinyjqui")
 library("shinythemes")
 library("parallel")
+library("scPred")
+library("data.table")
+library("tidyr")
+
+#### Variables that persist across sessions
+
+## Read in table with datasets available for scPred
+datasets_scpred <- fread("../meta/SCAP_scpred_datasets.tsv")
 
 server <- function(input, output, session){
   session$onSessionEnded(stopApp)
@@ -94,13 +105,14 @@ server <- function(input, output, session){
         loomR::connect(loom_files[i], mode = "r+")
       },
         error = function(e){
-          showModal(modalDialog(p(paste0("An error occured trying to connect to ", loom_files[i], ". It is possible that someone else is currently analyzing this file. Please wait for them to finish so your annotations do not conflict.")), title = "Error connecting to loom file."), session = getDefaultReactiveDomain())
+          showModal(modalDialog(p(paste0("An error occured trying to connect to ", loom_files[i],
+                                         ". It is possible that someone else is currently analyzing this file. Please wait for them to finish so your annotations do not conflict.")), title = "Error connecting to loom file."), session = getDefaultReactiveDomain())
           return(NULL)
       })
     }
-    # if(is.null(data)) return(NULL)
-    # if(length(data) != length(assays)) return(NULL)
-    # if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
+    if(is.null(data)) return(NULL)
+    if(length(data) != length(assays)) return(NULL)
+    if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <- assays
     return(data)
   })
@@ -121,6 +133,7 @@ server <- function(input, output, session){
     })
 
   
+  ## Florian: What is this variable doing here? Why is it not reactive?
   marker_tables <- list()
   
   #-- and store normalized count matrix in memory for speed --#
@@ -142,7 +155,11 @@ server <- function(input, output, session){
   #-- select input for Assay --#
   output$assay_1 <- renderUI({
     req(loom_data())
-    selectInput('assay_1', "Select Assay", choices = names(loom_data()), selected = ifelse(any(names(loom_data())=="RNA"),yes = "RNA",no = names(loom_data())[1]))
+    selectInput('assay_1', "Select Assay", 
+                choices = names(loom_data()), 
+                selected = ifelse(any(names(loom_data())=="RNA"),
+                                  yes = "RNA",
+                                  no = names(loom_data())[1]))
   })
   
   #-- select how to group cells --#
@@ -165,10 +182,10 @@ server <- function(input, output, session){
     options <- names(loom_data()[[assay]]$col.attrs)
     l.assay <- tolower(assay)
     reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
-    selectInput(inputId = 'reduction_1', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
+    selectInput(inputId = 'reduction_1', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('umap_',l.assay,'_2d')), yes = paste0('umap_',l.assay,'_2d'), no = reductions[1]))
   })
   
-  #-- select the featutres for the feature plot --#
+  #-- select the features for the feature plot --#
   output$featureplot_1_feature.select<- renderUI({
     req(input$assay_1)
     assay <- input$assay_1
@@ -207,13 +224,22 @@ server <- function(input, output, session){
   #-- dimensional reduction plot coloured by cell groups --#
   output$dimplot_1 <- renderPlotly({
     req(input$grouping_1, input$reduction_1)
-    dimPlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, annot_panel = "", low.res = 'yes', data = loom_data())
+    dimPlotlyOutput(assay.in = input$assay_1, 
+                    reduc.in = input$reduction_1, 
+                    group.by = input$grouping_1, 
+                    annot_panel = "", 
+                    low.res = 'yes', 
+                    data = loom_data())
   })
   
   #-- dimensional reduction plot coloured by feature expression --#
   output$featureplot_1 <- renderPlotly({
     req(input$featureplot_1_feature.select)
-    featurePlotlyOutput(assay.in = input$assay_1, reduc.in = input$reduction_1, group.by = input$grouping_1, feature.in = input$featureplot_1_feature.select, low.res = 'yes', data = loom_data())
+    featurePlotlyOutput(assay.in = input$assay_1, 
+                        reduc.in = input$reduction_1, 
+                        group.by = input$grouping_1, 
+                        feature.in = input$featureplot_1_feature.select, 
+                        low.res = 'yes', data = loom_data())
   })
   
   #-- dot plot for selected feature expression --#
@@ -312,7 +338,7 @@ server <- function(input, output, session){
     options <- names(loom_data()[[assay]]$col.attrs)[grep("_2d",names(loom_data()[[assay]]$col.attrs))]
     l.assay <- tolower(assay)
     reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
-    selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('tsne_',l.assay,'_2d')), yes = paste0('tsne_',l.assay,'_2d'), no = reductions[1]))
+    selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(reductions), selected = ifelse(test = any(reductions==paste0('umap_',l.assay,'_2d')), yes = paste0('umap_',l.assay,'_2d'), no = reductions[1]))
   })
   
   #-- select the featutres for the feature plot --#
@@ -361,7 +387,7 @@ server <- function(input, output, session){
         return(NULL)
       }
       group_assay <- paste(input$grouping_2, input$assay_2, sep = '_')
-      if(any(group_assay%in%names(marker_tables)) & is.null(cells)){
+      if(any(group_assay %in% names(marker_tables)) & is.null(cells)){
         t <- marker_tables[[group_assay]]
       }else{
         y <- loom_data()[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
@@ -574,7 +600,7 @@ server <- function(input, output, session){
       }else{
         names(ex_list) <- input$new_meta_group
       }
-      showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after once complete"), session = getDefaultReactiveDomain())
+      showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after completion"), session = getDefaultReactiveDomain())
       Sys.sleep(2)
       for(i in 1:length(loom_data())){
         loom_data()[[i]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
@@ -756,7 +782,7 @@ server <- function(input, output, session){
     })
   
 
-
+  #### Compare annotations elements
   ## Sankey diagram to compare two annotations
   output$sankey_diagram <- renderPlotly({
     req(sankey_comp())
@@ -785,9 +811,219 @@ server <- function(input, output, session){
       )
     )
 
+    }) # sankey_diagram end
+  
+  #### scPred #### 
+  ## Controls for scPred prediction panel
+  show_datasets <- reactive({
+    selected_species <- input$scpred_species
+    show_datasets <- subset(datasets_scpred,Species == selected_species)
+    datasets_selected <- show_datasets$SCAP_filename
+    names(datasets_selected) <- paste(datasets_scpred$Dataset,"."
+                                      ,datasets_scpred$Technology,"."
+                                      ,datasets_scpred$Organ,sep="")
+    return(names(datasets_selected))
+  })
+  
+  ## This output will hold the different datasets for the selected species
+  output$scpred_data_list <- renderUI({
+    req(input$scpred_species)
+    
+    selectInput(
+      inputId = 'scpred_data', 
+      label = 'Select a dataset!', 
+      choices = show_datasets(), 
+      multiple = FALSE)
+  })
+  
+  ## Button to start prediction
+  output$predict_cells_button <- renderUI({
+    req(loom_data())
+    actionButton("predict_cells", "Predict cell types!")
+  })
+  
+  ## Top of the predictions table
+  output$predictions_table <- renderTable({
+    req(predictions_results())
+    
+    head(predictions_results())
+    
+  })
+  
+  ## Plot a barplot representing how many cells were assigned to which classes
+  output$predictions_plot <- renderPlot({
+    req(predictions_results())
+    req(scpred_user_dataset())
+    
+    predictions_results_tr <- predictions_results() %>%
+      group_by(predClass) %>%
+      tally() %>%
+      mutate("percent" = round((n / sum(n))*100,2))
+    
+    ggplot(predictions_results_tr,aes(predClass,n,fill = predClass)) +
+      geom_bar(stat="identity") +
+      theme_cowplot() +
+      labs(x = "Predicted cell types",
+           y = "Number of cells",
+           title = paste("Dataset:", scpred_user_dataset(),sep="")) +
+      theme(legend.position = "none") +
+      coord_flip() +
+      geom_text(aes(label=paste(percent,"%",sep=""),
+                    fontface=2), position=position_dodge(width=0.9), hjust=-0.2)
+  })
+  
+  ## Plot a barplot representing how many cells were assigned to which classes
+  output$predictions_scores <- renderPlot({
+    req(predictions_results())
+    req(scpred_user_threshold())
+    req(scpred_user_dataset())
+    
+    predictions <- predictions_results()
+    
+    max_ct <- colnames(predictions)[apply(predictions,1,which.max)]
+    predictions$max_cell_type <- max_ct
+    max_ct_summary <- predictions %>%
+      group_by(max_cell_type) %>%
+      tally() %>%
+      arrange(desc(n))
+    
+    predictions$max_cell_type <- factor(predictions$max_cell_type,levels = max_ct_summary$max_cell_type)
+    
+    predictions_trans <- predictions %>%
+      mutate("cell" = rownames(predictions)) %>%
+      gather("predicted_type","score",-predClass,-cell,-max_cell_type) %>%
+      group_by(max_cell_type) %>%
+      arrange(max_cell_type,desc(score)) %>%
+      ungroup()
+    
+    predictions_trans$cell <- factor(predictions_trans$cell,
+                                     levels = unique(predictions_trans$cell))
+    
+    ggplot(predictions_trans,aes(cell,score, fill = predicted_type)) +
+      geom_bar(stat = "identity",position = "fill",
+               width=1) +
+      theme_cowplot() +
+      theme( axis.text.x=element_blank(),
+             axis.ticks.x=element_blank()) +
+      labs(x = "cells",
+           y = "Cell type probability") +
+      geom_hline(yintercept = scpred_user_threshold(), linetype = 2)
+    
+  })
 
-
+  
+  
+  filename_scpred <- reactive({
+    req(input$scpred_data)
+    
+    dataset_split <- strsplit(as.character(input$scpred_data),split="\\.")
+    species_sel <- input$scpred_species
+    dataset_sel <- dataset_split[[1]][1]
+    technology_sel <- dataset_split[[1]][2]
+    organ_sel <- dataset_split[[1]][3]
+    file <- subset(datasets_scpred,Species == species_sel &
+                   Dataset == dataset_sel &
+                   Technology == technology_sel &
+                   Organ == organ_sel)
+    
+    return(file$SCAP_filename)
+  })
+  
+  ## Perform predictions when user clicks button
+  predictions_results <- eventReactive(input$predict_cells ,{
+    ## Run prediction with the dataset selected
+    req(input$assay_1)
+    req(loom_data())
+    req(filename_scpred())
+    
+    showModal(modalDialog(p(paste0("Running scPred prediction on your data...")), 
+                          title = "This window will close once prediction is done! This can take a while depending on the size of your dataset!"), session = getDefaultReactiveDomain())
+    Sys.sleep(2)
+    
+    ## Instantiate full prediction table
+    all_predictions <- data.frame()
+    
+    ## Get scPred model
+    data_dir <- "/home/florian/reference/"
+    file_test_scpred <- paste(data_dir,filename_scpred(),sep="")
+    scp <- readRDS(file_test_scpred)
+    
+    ## Read in data matrix in X chunks and predict each junk, then stitch them
+    ## back together at the end
+    assay <- input$assay_1
+    
+    ## For big datasets, split cell vector into chunks of ~ 2000 cells
+    cell_number <- length(loom_data()[[assay]][["col_attrs/CellID"]][])
+    sub_vector <- 1:cell_number
+    n_chunks <- ceiling(cell_number/2000)
+    chunk_list <- split(sub_vector, sort(sub_vector%%n_chunks))
+    chunk_no <- 1
+    
+    for(chunk in chunk_list){
+      chunk_no <- chunk_no + 1
+      data_matrix <- as(t(loom_data()[[assay]]$matrix[chunk[1]:tail(chunk,n=1),]),"dgCMatrix")
+      gene.names <- loom_data()[[assay]][["row_attrs/features"]][]
+      rownames(data_matrix) <- gene.names
+      
+      ## Do prediction
+      scp <- scPredict(scp, newData = data_matrix, threshold = scpred_user_threshold())
+      # Return prediction results
+      predictions <- getPredictions(scp)
+      rm(data_matrix)
+  
+      # add prediction to full results
+      all_predictions <- rbind(all_predictions,predictions)
     }
-  )
+
+    ## Free up ram
+    rm(scp)
+    
+    Sys.sleep(2)
+    removeModal(session = getDefaultReactiveDomain())
+    
+    return(all_predictions)
+  })
+  
+  ## Send threshold to plot functions
+  scpred_user_threshold <- eventReactive(input$predict_cells ,{
+    req(input$pred_threshold)
+    return(input$pred_threshold)
+  })
+  
+  ## Send dataset to plot functions
+  scpred_user_dataset <- eventReactive(input$predict_cells ,{
+    req(input$scpred_data)
+    return(input$scpred_data)
+  })
+  
+  output$add_predictions_button <- renderUI({
+    req(loom_data())
+    req(predictions_results())
+    actionButton("add_predictions_meta", "Add predictions to metadata!")
+  })
+
+  ## Add predictions to metadata
+  observeEvent(input$add_predictions_meta,{
+    req(predictions_results())
+    req(loom_data())
+
+    new_meta_group <- predictions_results() %>%
+      select(predClass)
+    
+    dataset <- gsub(" " ,"_",scpred_user_dataset())
+    pred_params_name <- paste("scpred_",dataset,"_",scpred_user_threshold(),"_meta_data",sep="")
+    colnames(new_meta_group) <- c(pred_params_name)
+    
+    new_meta_group_list <- as.list(new_meta_group) 
+
+    showModal(modalDialog(p(paste0("Adding predictions to meta data...")), title = "This window will close once task is completed!"), session = getDefaultReactiveDomain())
+    Sys.sleep(2)
+    for(i in 1:length(loom_data())){
+      loom_data()[[i]]$add.col.attribute(attributes = new_meta_group_list, overwrite = TRUE)
+    }
+    loom.trigger$trigger()
+    Sys.sleep(2)
+    removeModal(session = getDefaultReactiveDomain())
+  })
   
 } # server end
