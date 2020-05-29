@@ -945,7 +945,7 @@ server <- function(input, output, session){
     
     ## Get scPred model
     data_dir <- "/scpred_references"
-    file_test_scpred <- paste(data_dir,filename_scpred(),sep="")
+    file_test_scpred <- paste(data_dir,filename_scpred(),sep="/")
     scp <- readRDS(file_test_scpred)
     
     ## Read in data matrix in X chunks and predict each junk, then stitch them
