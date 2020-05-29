@@ -944,7 +944,7 @@ server <- function(input, output, session){
     all_predictions <- data.frame()
     
     ## Get scPred model
-    data_dir <- "/home/florian/reference/"
+    data_dir <- "/scpred_references"
     file_test_scpred <- paste(data_dir,filename_scpred(),sep="")
     scp <- readRDS(file_test_scpred)
     
