@@ -562,8 +562,7 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
     ticks='none',
     range = c(zlimits[1],zlimits[2])
   )
-  #str(plot.data)
-  #print(head(plot.data))
+
   if(!any(is.na(as.numeric(plot.data[,ncol(plot.data)-1]))) & length(unique(plot.data[,ncol(plot.data)-1,drop = TRUE]))<50){
     plot.data[,ncol(plot.data)-1] <- as.factor(as.numeric(plot.data[,ncol(plot.data)-1]))
   }

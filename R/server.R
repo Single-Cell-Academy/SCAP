@@ -167,7 +167,9 @@ server <- function(input, output, session){
     req(input$assay_1, metadata_options())
     grouping_options <- metadata_options()
     assay <- input$assay_1
-    if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
+    if(any(grepl("seurat_clusters", sub("_meta_data","",grouping_options), ignore.case = FALSE))){
+      sel <- "seurat_clusters"
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
     }else{
       sel <- sub("_meta_data","",grouping_options[1])
@@ -311,9 +313,12 @@ server <- function(input, output, session){
     selectInput('assay_2', "Select Assay", choices = names(loom_data()), selected = ifelse(any(names(loom_data())=="RNA"),yes = "RNA",no = names(loom_data())[1]))
   })
   
+  to_listen <- reactive({
+    list(input$assay_2, loom_data())
+    })
   #-- initialize/reset tmp_annotations --#
-  observeEvent(input$assay_2,{
-    req(input$assay_2)
+  observeEvent(to_listen(),{
+    req(input$assay_2, loom_data())
     rvalues$tmp_annotations <- rep("unlabled", loom_data()[[input$assay_2]]$shape[2])
     names(rvalues$tmp_annotations) <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
   })
@@ -323,7 +328,9 @@ server <- function(input, output, session){
     req(input$assay_2, metadata_options())
     grouping_options <- metadata_options()
     assay <- input$assay_2
-    if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
+    if(any(grepl("seurat_clusters", sub("_meta_data","",grouping_options), ignore.case = FALSE))){
+      sel <- "seurat_clusters"
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
     }else{
       sel <- sub("_meta_data","",grouping_options[1])

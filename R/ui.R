@@ -97,16 +97,16 @@ ui <- navbarPage(
         column(
           width = 6,
           wellPanel(
-            style  = 'background: white;',
-            plotlyOutput('dimplot_1', height = '100%', width = '100%')  %>% withSpinner(color="black"),
+            style  = 'background:white;',
+            plotlyOutput('dimplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
             uiOutput('reduction_1', style = 'padding: 10px')
           )
         ),
         column(
           width = 6,
           wellPanel(
-            style  = 'background: white;',
-            plotlyOutput('featureplot_1', height = '100%', width = '100%')  %>% withSpinner(color="black"),
+            style  = 'background:white;',
+            plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
             uiOutput('featureplot_1_feature.select', style = 'padding: 10px')
           )
         ),
@@ -120,7 +120,7 @@ ui <- navbarPage(
           wellPanel(
             style  = 'background: white;',
             fluidRow(
-             uiOutput('dotplot_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '100px')
+             uiOutput('dotplot_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '400px')
             ),
             fluidRow(
               column(
@@ -169,7 +169,7 @@ ui <- navbarPage(
             fluidRow(
               column(
                 width = 9,
-                textInput('custom_name',label = NA, placeholder = "Enter cluster name here...")
+                textInput('custom_name',label = NULL, placeholder = "Enter cluster name here...")
               ),
               column(
                 width = 3,
@@ -190,7 +190,7 @@ ui <- navbarPage(
             width = 6,
             wellPanel(
               style  = 'background: white;padding: 20px',
-              plotlyOutput('dimplot_2', height = '100%', width = '100%') %>% withSpinner(color="black"),
+              plotlyOutput('dimplot_2', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
               uiOutput('reduction_2',style = 'padding:10px')
             )
           ),
@@ -198,7 +198,7 @@ ui <- navbarPage(
             width = 6,
             wellPanel(
               style  = 'background: white;',
-              plotlyOutput('featureplot_2', height = '100%', width = '100%') %>% withSpinner(color="black"),
+              plotlyOutput('featureplot_2', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
               uiOutput('featureplot_2_feature_select',style = 'padding:10px')
             )
           )
@@ -296,6 +296,68 @@ ui <- navbarPage(
       )
     )
   ),
+tabPanel("scPred",
+           conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
+           conditionalPanel(
+             condition = 'input.assay_1',
+             sidebarPanel(
+               h3("Project your cells unto a dataset:",align="left"),
+               selectInput(inputId="scpred_species", label="Choose a species!",
+                           choices=c("Mouse","Human"),
+                           selected="Mouse", multiple=FALSE, selectize=FALSE),
+
+               uiOutput("scpred_data_list"),
+               sliderInput("pred_threshold", label = "Choose your prediction threshold:",
+                           0, 1,
+                           value = 0.9, step = 0.01),
+               uiOutput("predict_cells_button")
+             ),
+
+             # Show a plot of the generated distribution
+             mainPanel(
+
+               # # Info box containing information about the selected dataset
+               h1("Explanation"),
+               p("You can use this Panel to predict cell types in your data from published, annotated Datasets.
+                 We have prepared several public datasets from different species (Human, Mouse),
+                 technologies (SMART-seq2,10x) and Organs for you to use. Simply select the type of dataset you 
+                 want to use as a reference in the sidebar on the left. To predict cell types, we are using scPred,
+                 a recently published algorithm that uses scalable vector machines to predict cell types against a pretrained dataset
+                 To learn more about scPred, click this link:"),
+               tags$a(href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1862-5", "scPred Manuscript!"),
+               h1("Results"),
+
+               h2("Save predictions:"),
+               br(),
+               uiOutput("add_predictions_button"),
+               br(),
+               h2("Score distributions for predictions:"),
+               plotOutput("predictions_scores"),
+               br(),
+               h2("Distribution of predicted cell types:"),
+               plotOutput("predictions_plot")
+               )
+             )
+           ), # end of tabPanel
+
+tabPanel("Compare annotations",
+             fluidRow(
+               column(4,
+                      uiOutput("comp_anno_list1")
+                      ),
+               column(4,
+                      uiOutput("comp_anno_list2")
+               ),
+               column(4,
+                      br(),
+                      actionButton("compare_annos","Compare annotations!"))
+             ),
+             
+             fluidRow(
+               column(12,
+                      plotlyOutput("sankey_diagram", height = "auto"))
+             )     
+         ),
   tabPanel(
     "File Conversion",
     sidebarPanel(
@@ -369,75 +431,8 @@ ui <- navbarPage(
     mainPanel(
       #h1('Stuff Goes Here')
     )
-  ),
-  
-tabPanel("scPred",
-           conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
-           conditionalPanel(
-             condition = 'input.assay_1',
-             sidebarPanel(
-               h3("Project your cells unto a dataset:",align="left"),
-               selectInput(inputId="scpred_species", label="Choose a species!",
-                           choices=c("Mouse","Human"),
-                           selected="Mouse", multiple=FALSE, selectize=FALSE),
-
-               uiOutput("scpred_data_list"),
-               sliderInput("pred_threshold", label = "Choose your prediction threshold:",
-                           0, 1,
-                           value = 0.9, step = 0.01),
-               uiOutput("predict_cells_button")
-             ),
-
-             # Show a plot of the generated distribution
-             mainPanel(
-
-               # # Info box containing information about the selected dataset
-               h1("Explanation"),
-               p("You can use this Panel to predict cell types in your data from published, annotated Datasets.
-                 We have prepared several public datasets from different species (Human, Mouse),
-                 technologies (SMART-seq2,10x) and Organs for you to use. Simply select the type of dataset you 
-                 want to use as a reference in the sidebar on the left. To predict cell types, we are using scPred,
-                 a recently published algorithm that uses scalable vector machines to predict cell types against a pretrained dataset
-                 To learn more about scPred, click this link:"),
-               tags$a(href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1862-5", "scPred Manuscript!"),
-               h1("Results"),
-
-               h2("Save predictions:"),
-               br(),
-               uiOutput("add_predictions_button"),
-               br(),
-               h2("Score distributions for predictions:"),
-               plotOutput("predictions_scores"),
-               br(),
-               h2("Distribution of predicted cell types:"),
-               plotOutput("predictions_plot")
-               )
-             )
-           ), # end of tabPanel
-
-tabPanel("Compare annotations",icon = icon("compress"),
-             
-             fluidRow(
-               column(4,
-                      uiOutput("comp_anno_list1")
-                      ),
-               column(4,
-                      uiOutput("comp_anno_list2")
-               ),
-               column(4,
-                      br(),
-                      actionButton("compare_annos","Compare annotations!"))
-             ),
-             
-             fluidRow(
-               column(12,
-                      plotlyOutput("sankey_diagram", height = "auto"))
-             )     
-         )
-
+  )
 )   # end ui
-
-
 #jqui_resizable(jqui_draggable(
 #%>% withSpinner(color="#0dc5c1")
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++#
