@@ -38,9 +38,10 @@ library("plotly")
 library("presto")
 library("Seurat")
 library("rjson")
+library("viridis")
 
 
-
+palette <- colorRampPalette(c("lightgrey", viridis(10)))
 
 save_figure <- function(file_type, file_name, units, height, width, resolution, to_plot){
   if(file_type == "png"){
@@ -582,7 +583,7 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
                    sub('_meta_data','',group.by),": ", plot.data[,3],"\n</br>",
                    label_key,"_1: ", format(plot.data[,1],digits=3),"\n",
                    "</br>",label_key,"_2: ", format(plot.data[,2],digits=3), "\n",
-                   "</br>percent.mt: ", format(plot.data[,4],digits=3), "%"), 
+                   "</br>percent.mt: ", format(plot.data[,4],digits=3), "%"),
                  hovertemplate = paste0('<b>%{text}</b><extra></extra>')
     ) %>% layout(title = ifelse(test = annot_panel == 'cell_annotation_custom', yes = paste0(assay.in, " data coloured by custom annotations"), no = paste0(assay.in, " data coloured by ", sub('_meta_data','',group.by))) ,xaxis = ax.x, yaxis = ax.y, dragmode='lasso')
   }else{
@@ -679,23 +680,25 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
   if(length(dims) == 2){
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2],
                  type = 'scatter', mode = 'markers', key = ~rownames(plot.data),
-                 color = plot.data[,4],text =  ~paste0(
+                 color = plot.data[,4], colors = palette(100), opacity = 0.6, text =  ~paste0(
                    sub("_meta_data","",group.by),": ", plot.data[,3],"\n",
                    "</br>",'Expression',": ", format(plot.data[,4],digits=3),"\n",
                    "</br>",label_key,"_1: ", format(plot.data[,1],digits=3),"\n",
                    "</br>",label_key,"_2: ", format(plot.data[,2],digits=3), "\n"), 
+                 marker = list(size = 3),
                  hovertemplate = paste0('<b>%{text}</b>',
                                         '<extra></extra>')
     ) %>% layout(title = feature.in ,xaxis = ax.x, yaxis = ax.y, dragmode='lasso')
   }else{
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], z = plot.data[,3],
                  type = 'scatter3d', mode = 'markers', key = ~rownames(plot.data),
-                 color = plot.data[,5],text =  ~paste0(
+                 color = plot.data[,5], colors = palette(100), opacity = 0.6, text =  ~paste0(
                    sub("_meta_data","",group.by),": ", plot.data[,4],"\n",
                    "</br>",'Expression',": ", format(plot.data[,5],digits=3),"\n",
                    "</br>",label_key,"_1: ", format(plot.data[,1],digits=3),"\n",
                    "</br>",label_key,"_2: ", format(plot.data[,2],digits=3), "\n",
                    "</br>",label_key,"_3: ", format(plot.data[,3],digits=3), "\n"), 
+                 marker = list(size = 3),
                  hovertemplate = paste0('<b>%{text}</b>',
                                         '<extra></extra>')
     ) %>% layout(title = feature.in , scene = list(xaxis = ax.x, yaxis = ax.y, zaxis = ax.z), dragmode='lasso' ,legend = list(x = 100, y = 0.5))
