@@ -7,6 +7,18 @@
 #   #library(Seurat)
 #   
 #   seur <- readRDS(obj)
+
+
+for(j in 1:ncol(seur@meta.data)){
+  if(is.factor(seur@meta.data[,j]) == T){
+  seur@meta.data[,j] = as.character(seur@meta.data[,j]) # Force the variable type to be character
+  seur@meta.data[,j][is.na(seur@meta.data[,j])] <- "N.A"
+  }
+  if(is.character(seur@meta.data[,j]) == T){
+  seur@meta.data[,j][is.na(seur@meta.data[,j])] <- "N.A"
+  }
+}
+
 #   
 #   if(!grepl('^seurat',class(seur)[1],ignore.case = T)){
 #     showNotification('Error: The selected object is of class ', class(seur)[1], ' but must be of class Seurat', type = 'error')
