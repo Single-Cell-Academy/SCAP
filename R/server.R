@@ -667,7 +667,7 @@ server <- function(input, output, session){
   
   observeEvent(input$sl_convert, ignoreInit = T, {
     if(is.null(input$object_file)){
-      showNotification('A seurat object must be selected', type = 'error')
+      showNotification('A Seurat or Scanpy object must be selected', type = 'error')
       return(NULL)
       }else if(is.null(input$new_directory)){
         showNotification('A directory to save the converted file to must be selected', type = 'error')
@@ -683,8 +683,10 @@ server <- function(input, output, session){
       file_path <- parseFilePaths(selection = input$object_file, roots = volumes)$datapath
       
       if(!grepl('\\.rds$', file_path, ignore.case = T)){
-        showNotification('The selected file must be of type .rds', type = 'error')
-        return(NULL)
+        if(!grepl('\\.h5|\\.h5ad', file_path, ignore.case = T)){
+          showNotification('The selected file must be of type .rds or .h5/.h5ad', type = 'error')
+          return(NULL)
+        }
       }
 
       showModal(modalDialog(p("Converting Seurat Object to loom file(s). Please Wait..."), title = "This window will close after conversion is complete"), session = getDefaultReactiveDomain())

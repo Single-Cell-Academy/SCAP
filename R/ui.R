@@ -367,10 +367,10 @@ ui <- navbarPage(
     sidebarPanel(
       tabsetPanel(
         tabPanel(
-          'Seurat to Loom',
+          'Seurat/Scanpy to Loom',
           fluidRow(
             style = 'padding:10px',
-            shinyFilesButton(id = "object_file", label = "Choose Seurat Object to Convert", title = "Choose Seurat Object to Convert", multiple = F, style = "width:100%")
+            shinyFilesButton(id = "object_file", label = "Choose Seurat (.rds) / Scanpy (/.h5/.h5ad) Object to Convert ", title = "Choose Seurat (.rds) / Scanpy (/.h5/.h5ad) Object to Convert", multiple = F, style = "width:100%")
             ),
           fluidRow(
             style = 'padding:10px',

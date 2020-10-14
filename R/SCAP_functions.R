@@ -122,7 +122,14 @@ seuratToLoom <- function(obj, dir){
   }
 
   ## Make sure the object is really .rds before attempting to read it
-  seur <- try(readRDS(obj))
+  if(endsWith(obj,".rds")){
+    seur <- try(readRDS(obj))
+  }else if(grepl(".h5|.h5ad",obj) ){
+    seur <- try(ReadH5AD(obj)) ## Read in scanpy object and convert to
+    if(grepl('^seurat',class(seur)[1],ignore.case = T)){
+      Idents(seur) <- "louvain_scanpy_clusters"
+    }
+  }
 
   if(class(seur) == "try-error"){
     showNotification('Error: The selected file is labeled .rds but is not actually a valid .rds file!', type = 'error')
