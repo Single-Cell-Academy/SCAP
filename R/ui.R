@@ -106,8 +106,14 @@ ui <- navbarPage(
         width = 6,
         wellPanel(
           style  = 'background:white;',
-          plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-          uiOutput('featureplot_1_feature.select', style = 'padding: 10px')
+          conditionalPanel(condition = "input.nebulosa_on == 'no'", 
+                           plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px')
+                           ),
+          conditionalPanel(condition = "input.nebulosa_on == 'yes'", 
+                           plotOutput('featureplot_1_nebulosa', height = '110%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px')
+          ),
+          uiOutput('featureplot_1_feature.select', style = 'padding: 10px'),
+          uiOutput('featureplot_1_nebulosa_on', style = 'padding: 10px')
           )
         ),
       div(style = "height:10px;")
@@ -297,7 +303,7 @@ ui <- navbarPage(
       )
     ),
   
-  #### scPred panel, currrently disabled
+  #### scPred panel, temporarily disabled
   # tabPanel("scPred",
   #  conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
   #  conditionalPanel(

@@ -39,7 +39,8 @@ library("presto")
 library("Seurat")
 library("rjson")
 library("viridis")
-
+library("Nebulosa")
+library("stringr")
 
 palette <- colorRampPalette(c("lightgrey", viridis(10)))
 
@@ -692,7 +693,7 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
                    "</br>",'Expression',": ", format(plot.data[,4],digits=3),"\n",
                    "</br>",label_key,"_1: ", format(plot.data[,1],digits=3),"\n",
                    "</br>",label_key,"_2: ", format(plot.data[,2],digits=3), "\n"), 
-                 marker = list(size = 3),
+                 marker = list(size = 5),
                  hovertemplate = paste0('<b>%{text}</b>',
                                         '<extra></extra>')
     ) %>% layout(title = feature.in ,xaxis = ax.x, yaxis = ax.y, dragmode='lasso')
@@ -718,6 +719,51 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
     return(p)
   }
 }
+
+#### 
+## Nebulosa version
+featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, feature.in, low.res, data){
+  #t1 <- Sys.time()
+  group.by <- paste0(group.by,'_meta_data')
+
+  if(!any(names(data[[assay.in]]$col.attrs) == group.by)){
+    return(NULL)
+  }
+  
+  data.features <- as.data.frame(data[[assay.in]][['matrix']][,which(data[[assay.in]]$row.attrs$features[]%in%feature.in)])
+  if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
+  
+  data.annot <- data[[assay.in]]$get.attribute.df(attributes=group.by)
+  
+  rownames(data.features) <- data[[assay.in]]$col.attrs$CellID[]
+  colnames(data.features) <- feature.in
+  
+  dims <- names(data[[assay.in]]$col.attrs)[grepl(reduc.in,names(data[[assay.in]]$col.attrs))]
+  
+  data_seurat <- CreateSeuratObject(counts = t(data.features),
+                                    meta.data = data.annot,
+                                    min.cells = 0,
+                                    min.features = 0)
+  
+  plot.data <- data[[assay.in]]$get.attribute.df(attributes=dims)
+  colnames(plot.data) <- c("Dimension_1","Dimension_2")
+
+  umap_embedding <- CreateDimReducObject(embeddings = as.matrix(plot.data),
+                                         assay = "RNA",
+                                         key = "Dimension_") 
+
+  data_seurat[['umap']] <- umap_embedding
+  
+  p <- plot_density(data_seurat, 
+                    features = feature.in,
+                    size = 2) +
+    theme_cowplot()
+
+  return(p)
+
+}
+
+####
 
 split_dot_plot <- function(data, 
                            features, 

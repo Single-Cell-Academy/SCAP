@@ -203,6 +203,14 @@ server <- function(input, output, session){
     selectInput(inputId = 'featureplot_1_feature.select', label = 'Select a Feature to Visualize on the Feature Plot', choices = loom_data()[[assay]][['row_attrs/features']][], selected = loom_data()[[assay]][['row_attrs/features']][1], multiple = FALSE)
     })
   
+  output$featureplot_1_nebulosa_on<- renderUI({
+    req(input$assay_1)
+    selectInput(inputId = "nebulosa_on",
+                choices = c("yes","no"),
+                label = "Plot Nebulosa density instead of featureplot!",
+                selected = "no")
+  })
+  
   #-- select the featutres for the dot plot --#
   output$dotplot_1_feature_select<- renderUI({
     req(input$assay_1)
@@ -246,12 +254,22 @@ server <- function(input, output, session){
   #-- dimensional reduction plot coloured by feature expression --#
   output$featureplot_1 <- renderPlotly({
     req(input$featureplot_1_feature.select)
-    featurePlotlyOutput(assay.in = input$assay_1, 
-      reduc.in = input$reduction_1, 
-      group.by = input$grouping_1, 
-      feature.in = input$featureplot_1_feature.select, 
+    featurePlotlyOutput(assay.in = input$assay_1,
+      reduc.in = input$reduction_1,
+      group.by = input$grouping_1,
+      feature.in = input$featureplot_1_feature.select,
       low.res = 'yes', data = loom_data())
     })
+  
+  #-- dimensional reduction plot coloured by feature expression --#
+  output$featureplot_1_nebulosa <- renderPlot({
+    req(input$featureplot_1_feature.select)
+    featurePlotlyOutput_nebulosa(assay.in = input$assay_1,
+      reduc.in = input$reduction_1,
+      group.by = input$grouping_1,
+      feature.in = input$featureplot_1_feature.select,
+      low.res = 'yes', data = loom_data())
+  })
   
   #-- dot plot for selected feature expression --#
   dot_plot <- reactive({
