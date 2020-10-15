@@ -129,6 +129,7 @@ seuratToLoom <- function(obj, dir){
     seur <- try(ReadH5AD(obj)) ## Read in scanpy object and convert to
     if(grepl('^seurat',class(seur)[1],ignore.case = T)){
       Idents(seur) <- "louvain_scanpy_clusters"
+      seur@assays$RNA@counts <- seur@assays$RNA@data
     }
   }
 
