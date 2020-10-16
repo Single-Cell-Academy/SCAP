@@ -49,6 +49,7 @@ library("tidyr")
 
 ## Read in table with datasets available for scPred
 datasets_scpred <- fread("../meta/SCAP_scpred_datasets.tsv")
+#datasets_scibet <- fread()
 
 server <- function(input, output, session){
   session$onSessionEnded(stopApp)
@@ -862,6 +863,19 @@ server <- function(input, output, session){
 
     }) # sankey_diagram end
   
+  #### SciBet #### 
+  ## Controls for SciBet prediction panel
+  show_datasets <- reactive({
+    selected_species <- input$scpred_species
+    show_datasets <- subset(datasets_scpred,Species == selected_species)
+    datasets_selected <- show_datasets$SCAP_filename
+    names(datasets_selected) <- paste(datasets_scpred$Dataset,"."
+                                      ,datasets_scpred$Technology,"."
+                                      ,datasets_scpred$Organ,sep="")
+    return(names(datasets_selected))
+  })
+  
+  
   #### scPred #### 
   ## Controls for scPred prediction panel
   show_datasets <- reactive({
@@ -960,8 +974,6 @@ server <- function(input, output, session){
     
     })
 
-  
-  
   filename_scpred <- reactive({
     req(input$scpred_data)
     

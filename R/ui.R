@@ -303,7 +303,40 @@ ui <- navbarPage(
       )
     ),
   
-  #### scPred panel, temporarily disabled
+  # tabPanel("SciBet",
+  #           conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
+  #           conditionalPanel(
+  #             condition = 'input.assay_1',
+  #                sidebarPanel(
+  #                  h3("Choose your reference dataset:",align="left"),
+  #                  selectInput(inputId="sci_bet_species", label="Choose a species!",
+  #                    choices=c("Mouse","Human"),
+  #                    selected="Mouse", multiple=FALSE, selectize=FALSE),
+  #                  uiOutput("scibet_reference_sets"),
+  #                  uiOutput("predict_cells_button")
+  #                  ),
+  #             #            # Show a plot of the generated distribution
+  #             #            mainPanel(
+  #             # 
+  #             #              # # Info box containing information about the selected dataset
+  #             #              h1("Explanation"),
+  #             #              p("You can use this Panel to predict cell types in your data from published, annotated Datasets.
+  #             #                :"),
+  #             #              tags$a(href="", "SciBet Manuscript!"),
+  #             #
+  #             #              h1("Results"),
+  #             # 
+  #             #              h2("Save predictions:"),
+  #             #              br(),
+  #             #              uiOutput("add_predictions_button"),
+  #             #              br(),
+  #             #              h2("Cell type distributions for predictions:"),
+  #             #              plotOutput("predictions_scores"),
+  #             #              )
+  #           )
+  #          ),
+  
+  # ### scPred panel, temporarily disabled
   # tabPanel("scPred",
   #  conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
   #  conditionalPanel(
@@ -328,7 +361,7 @@ ui <- navbarPage(
   #              h1("Explanation"),
   #              p("You can use this Panel to predict cell types in your data from published, annotated Datasets.
   #                We have prepared several public datasets from different species (Human, Mouse),
-  #                technologies (SMART-seq2,10x) and Organs for you to use. Simply select the type of dataset you 
+  #                technologies (SMART-seq2,10x) and Organs for you to use. Simply select the type of dataset you
   #                want to use as a reference in the sidebar on the left. To predict cell types, we are using scPred,
   #                a recently published algorithm that uses scalable vector machines to predict cell types against a pretrained dataset
   #                To learn more about scPred, click this link:"),
