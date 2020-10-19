@@ -337,7 +337,7 @@ ui <- navbarPage(
                            h1("Results"),
                            
                            h2("Distribution of predicted cell types:"),
-                           plotOutput("scibet_redictions_plot"),
+                           plotOutput("scibet_predictions_plot"),
                         
                            )
             )

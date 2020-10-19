@@ -980,7 +980,7 @@ server <- function(input, output, session){
   })
   
   ## Plot a barplot representing how many cells were assigned to which classes
-  output$scibet_redictions_plot <- renderPlot({
+  output$scibet_predictions_plot <- renderPlot({
     req(predictions_results())
 
     label_summary <- predictions_results() %>%
