@@ -937,7 +937,7 @@ server <- function(input, output, session){
     all_predictions <- data.frame()
       
     ## Get scPred model
-    data_dir <- "/scpred_references"
+    data_dir <- "../SciBet_reference_datasets"
     file_test_scibet <- paste(data_dir,scibet_ref_selected()$SCAP_filename,sep="/")
     model <- readr::read_csv(file_test_scibet)
     if(colnames(model)[1] == "X1" & colnames(model)[2] == "Unnamed: 0"){
