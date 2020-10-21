@@ -483,7 +483,11 @@ ui <- navbarPage(
     mainPanel(
       #h1('Stuff Goes Here')
       )
-    )
+    ),
+  tabPanel(
+    "News",
+    includeMarkdown("../news/news.md")
+  ) ## end news tabPanel
 )   # end ui
 #jqui_resizable(jqui_draggable(
 #%>% withSpinner(color="#0dc5c1")
