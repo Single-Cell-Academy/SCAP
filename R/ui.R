@@ -108,12 +108,15 @@ ui <- navbarPage(
         wellPanel(
           style  = 'background:white;',
           conditionalPanel(condition = "input.nebulosa_on == 'no'", 
-                           plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px')
-                           ),
-          conditionalPanel(condition = "input.nebulosa_on == 'yes'", 
-                           plotOutput('featureplot_1_nebulosa', height = '110%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px')
+                           plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
+                           uiOutput('featureplot_1_feature.select', style = 'padding: 10px'),
           ),
-          uiOutput('featureplot_1_feature.select', style = 'padding: 10px'),
+
+          conditionalPanel(condition = "input.nebulosa_on == 'yes'", 
+                           plotOutput('featureplot_1_nebulosa', height = '120%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
+                           uiOutput('featureplot_1_features_nebulosa.select', style = 'padding: 10px')
+          ),
+
           uiOutput('featureplot_1_nebulosa_on', style = 'padding: 10px')
           )
         ),
@@ -483,7 +486,7 @@ ui <- navbarPage(
     mainPanel(
       #h1('Stuff Goes Here')
       )
-    )
+  )
 )   # end ui
 #jqui_resizable(jqui_draggable(
 #%>% withSpinner(color="#0dc5c1")
