@@ -1,12 +1,3 @@
----
-title: "News"
-author: Florian Wuennemann
-date: October 21, 2020
-output:
-  md_document:
-    variant: markdown_github
----
-
 # **News**
 
 We have added this News tab to the SCAP app. Come back here to find the newest updates and functions we have implemented into SCAP!
