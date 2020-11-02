@@ -723,21 +723,25 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
 
 #### 
 ## Nebulosa version
-featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, feature.in, low.res, data){
+featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, features.in, low.res, data){
   #t1 <- Sys.time()
   group.by <- paste0(group.by,'_meta_data')
-
+  
+  col.attrs <- names(data[[assay.in]]$col.attrs)
+  reduc <- col.attrs[grepl(reduc.in,col.attrs)]
+  label_key <- reduc_key(key = toupper(sub("_.*","",reduc)))
+  
   if(!any(names(data[[assay.in]]$col.attrs) == group.by)){
     return(NULL)
   }
   
-  data.features <- as.data.frame(data[[assay.in]][['matrix']][,which(data[[assay.in]]$row.attrs$features[]%in%feature.in)])
+  data.features <- as.data.frame(data[[assay.in]][['matrix']][,which(data[[assay.in]]$row.attrs$features[]%in%features.in)])
   if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
   
   data.annot <- data[[assay.in]]$get.attribute.df(attributes=group.by)
   
   rownames(data.features) <- data[[assay.in]]$col.attrs$CellID[]
-  colnames(data.features) <- feature.in
+  colnames(data.features) <- features.in
   
   dims <- names(data[[assay.in]]$col.attrs)[grepl(reduc.in,names(data[[assay.in]]$col.attrs))]
   
@@ -747,21 +751,32 @@ featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, feature.
                                     min.features = 0)
   
   plot.data <- data[[assay.in]]$get.attribute.df(attributes=dims)
-  colnames(plot.data) <- c("Dimension_1","Dimension_2")
+  colnames(plot.data) <- c(paste(label_key," 1",sep =""),paste(label_key," 2",sep =""))
 
-  umap_embedding <- CreateDimReducObject(embeddings = as.matrix(plot.data),
+  embedding <- CreateDimReducObject(embeddings = as.matrix(plot.data),
                                          assay = "RNA",
-                                         key = "Dimension_") 
+                                         key = paste(label_key,"_",sep="")) 
 
-  data_seurat[['umap']] <- umap_embedding
+  data_seurat[['umap']] <- embedding
   
-  p <- plot_density(data_seurat, 
-                    features = feature.in,
-                    size = 2) +
-    theme_cowplot()
-
-  return(p)
-
+  if(length(features.in) == 1){
+    single_nebulosa <- plot_density(data_seurat, 
+                      features = features.in,
+                      size = 2) +
+      theme_cowplot()
+    
+    return(single_nebulosa)
+  }else if(length(features.in) > 1){
+    p <- plot_density(data_seurat, 
+                      features = features.in,
+                      joint = TRUE, combine = FALSE,
+                      size = 2) 
+    
+    multi_nebulosa <- p[[length(p)]] +
+      theme_cowplot()
+    
+    return(multi_nebulosa)
+  }
 }
 
 ####
