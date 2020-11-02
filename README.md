@@ -1,6 +1,10 @@
 # SCAP
 An Rshiny portal for analysis of scRNA-seq data
 
+# Updates & NEWS
+
+For all recent updates and new features, check our [NEWS](./news/news.md).
+
 ## Setup
 
 ```R
