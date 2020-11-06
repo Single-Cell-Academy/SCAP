@@ -823,9 +823,9 @@ split_dot_plot <- function(data,
     #}
     cols <- cols[1:length(x = unique(x = splits))]
     names(x = cols) <- unique(x = splits)
-    data.features$id <- paste(data.features$id, splits, sep = '_')
+    data.features$id <- paste(data.features$id, splits, sep = 'SPLITBYTAG')
     unique.splits <- unique(x = splits)
-    id.levels <- paste0(rep(x = id.levels, each = length(x = unique.splits)), "_", rep(x = unique(x = splits), times = length(x = id.levels)))
+    id.levels <- paste0(rep(x = id.levels, each = length(x = unique.splits)), "SPLITBYTAG", rep(x = unique(x = splits), times = length(x = id.levels)))
   }
   data.plot <- lapply(
     X = unique(x = data.features$id),
@@ -877,8 +877,8 @@ split_dot_plot <- function(data,
   data.plot$pct.exp[data.plot$pct.exp < dot.min] <- NA
   data.plot$pct.exp <- data.plot$pct.exp * 100
   
-  data.plot$split <- sub(".*_","",data.plot$id)
-  data.plot$id <- sub("_.*","",data.plot$id)
+  data.plot$split <- sub(".*SPLITBYTAG","",data.plot$id)
+  data.plot$id <- sub("SPLITBYTAG.*","",data.plot$id)
   
   data.plot <- data.plot
   data.plot$id <- as.factor(data.plot$id)
