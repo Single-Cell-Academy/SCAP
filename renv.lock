@@ -2039,7 +2039,7 @@
     }
   },
   "Python": {
-    "Version": "3.6.10",
+    "Version": "3.8.5",
     "Type": "virtualenv"
   }
 }
