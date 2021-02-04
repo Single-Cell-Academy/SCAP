@@ -47,7 +47,6 @@ library("tidyr")
 library("scibet")
 library("readr")
 library("reactable")
-library("renv")
 
 #### Variables that persist across sessions
 
