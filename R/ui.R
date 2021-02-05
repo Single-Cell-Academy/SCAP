@@ -480,6 +480,32 @@ ui <- navbarPage(
               h4(textOutput(outputId = 'chosen_new_directory_2'))
               )
             )
+          ),
+        tabPanel(
+          "To h5ad",
+          fluidRow(
+              style = "padding:10px",
+              h3("Convert loom or Seurat to h5ad"),
+              shinyFilesButton(id = "in_file_to_h5ad", label = "Choose File to Convert", title = "Choose File to Convert", multiple = F, style = "width:100%"),
+              textInput('out_file_to_h5ad', label = 'File name for h5ad Output', value = NA, placeholder = "Save h5ad File As"),
+              shinyDirButton(id = "out_dir_to_h5ad", label = "Select where to save h5ad file", title = "Select where to save h5ad file", style = "width:100%"),
+              radioButtons('is_legacy', label = "Legacy Conversion?", choices = c("yes", "no"), inline = T),
+              conditionalPanel(
+                condition = "input.is_legacy=='yes'",
+                shinyFilesButton(id = "legacy_file_to_h5ad", label = "Choose Original Seurat Object", title = "Choose Original Seurat Object for Legacy Conversion", multiple = F, style = "width:100%")
+              ),
+              actionButton(inputId = 'to_h5ad', label = 'Convert', icon = icon('arrow-circle-down'), style = "width:100%")
+            ),
+            fluidRow(
+              h3('Selected file:'),
+              h4(textOutput(outputId = 'chosen_in_file_to_h5ad')),
+              h3('Selected out file:'),
+              h4(textOutput(outputId = 'chosen_out_file_to_h5ad')),
+              h3('Selected directory:'),
+              h4(textOutput(outputId = 'chosen_out_dir_to_h5ad')),
+              h3('Selected legacy file:'),
+              h4(textOutput(outputId = 'chosen_legacy_file_to_h5ad'))
+            )
           )
         )
       ),
