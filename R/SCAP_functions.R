@@ -41,6 +41,9 @@ library("rjson")
 library("viridis")
 library("Nebulosa")
 library("stringr")
+library("Seurat")
+library("SeuratDisk")
+library("reticulate")
 
 palette <- colorRampPalette(c("lightgrey", viridis(10)))
 
@@ -102,6 +105,23 @@ loomToSeurat <- function(obj, loom, dir, file){
   seur@meta.data <- cbind(seur@meta.data, loom_metaData)
   print(paste('new mata data:'))
   print(str(seur@meta.data))
+  tryCatch(
+    {
+      seur <- UpdateSeuratObject(seur)
+    },
+    error=function(cond){
+      message('Error: Could not update Seurat Object:')
+      message(cond)
+    },
+    warning=function(cond){
+      message('Warning when trying to update Seurat Object:')
+      message(cond)
+      seur <- UpdateSeuratObject(seur)
+    },
+    finally={
+      message('Saving Seurat Object...')
+    }
+  )
   if(is.null(file)){
     saveRDS(seur, obj)
   }else{
@@ -109,6 +129,52 @@ loomToSeurat <- function(obj, loom, dir, file){
   }
   return(1)
 }
+
+loomToSeurat_legacy <- function(obj, loom){
+  thisDate <- gsub(":","_",gsub(" ","_",date()))
+  # print(paste("thisDate:", thisDate))
+  # print(paste("obj:", obj))
+  # print(paste("dir:", dir))
+  # print(paste("file:", file))
+  # print("loom:")
+  # print(str(loom))
+  print(nrow(obj@meta.data))
+  print("obj meta data:")
+  print(str(obj@meta.data))
+  print('loom # cells:')
+  print(loom[[1]]$col.attrs[[1]]$dims)
+  if(nrow(obj@meta.data) != loom[[1]]$col.attrs[[1]]$dims){
+    showModal(modalDialog(p("Error: Seurat object and loom object have different number of cells and likely do not coresspond to the same experiment"), title = paste0("ERROR")), session = getDefaultReactiveDomain())
+    return(-1)
+  }
+  loom_metaData <- loom[[1]]$get.attribute.df(attributes = names(loom[[1]]$col.attrs)[grep("_meta_data$", names(loom[[1]]$col.attrs))])
+  print("loom_metaData:")
+  print(colnames(loom_metaData))
+  colnames(loom_metaData) <- sub("_meta_data$","",colnames(loom_metaData))
+  print("loom_metaData:")
+  print(colnames(loom_metaData))
+  same_names <- colnames(loom_metaData)[which(colnames(loom_metaData)%in%colnames(obj@meta.data))]
+  if(length(same_names)>0){
+    for(i in 1:length(same_names)){
+      if(identical(loom_metaData[,same_names[i]],obj@meta.data[,same_names[i]])){
+        loom_metaData <- loom_metaData[,-which(colnames(loom_metaData)==same_names[i])]
+      }else{
+        colnames(loom_metaData)[which(colnames(loom_metaData)==same_names[i])] <- paste0(same_names[i],"_",thisDate)
+      }
+    }
+  }
+  print(paste("loom_metaData:", colnames(loom_metaData)))
+  obj@meta.data <- cbind(obj@meta.data, loom_metaData)
+  print(paste('new mata data:'))
+  print(str(obj@meta.data))
+  # if(is.null(file)){
+  #   saveRDS(seur, obj)
+  # }else{
+  #   saveRDS(seur, paste0(dir,"/",file))
+  # }
+  return(obj)
+}
+
 
 seuratToLoom <- function(obj, dir){
   #library(loomR)
@@ -257,6 +323,82 @@ seuratToLoom <- function(obj, dir){
       }
     }
     data$close_all()
+  }
+  return(1)
+}
+
+try_seurat_update <- function(seur){
+  tryCatch(
+    {
+      seur <- UpdateSeuratObject(seur)
+    },
+    error=function(cond){
+      message('Error: Could not update Seurat Object:')
+      message(cond)
+    },
+    warning=function(cond){
+      message('Warning when trying to update Seurat Object:')
+      message(cond)
+      seur <- UpdateSeuratObject(seur)
+    },
+    finally={
+      return(seur)
+    }
+  )
+}
+
+detect_legacy_scap <- function(loom){
+  col <- names(loom[[1]][['col_attrs']])
+  if(any(grepl("_meta_data$", col)) && any(grepl("_reduction$", col))){
+    return(1)
+  }else{
+    return(0)
+  }
+}
+
+scap_to_h5ad <- function(in_file, out_dir, out_file, old_file){
+  if(grepl("\\.h5ad$", out_file) == FALSE){
+    out_file <- paste0(out_file, ".h5ad")
+  }
+  out_path <- file.path(out_dir, out_file)
+  if(grepl("\\.rds$", in_file, ignore.case = TRUE)){
+    obj <- readRDS(in_file)
+  }else if(grepl("\\.loom$", in_file, ignore.case = TRUE)){
+    obj <- connect(in_file)
+  }else{
+    return(0)
+  }
+  if(identical(class(obj)[1], "Seurat")){
+    obj <- UpdateSeuratObject(obj)
+    SaveH5Seurat(obj, filename = sub("\\.h5ad$", ".h5Seurat", out_path))
+    Convert(sub("\\.h5ad$", ".h5Seurat", out_path), dest = "h5ad")
+  }else if(identical(class(obj)[1], "loom")){
+    legacy <- detect_legacy_scap(list(obj))
+    if(legacy){
+      if(is.null(old_file)){
+        return(-1)
+      }else{
+        old_obj <- readRDS(old_file)
+        if(identical(class(old_obj)[1], 'Seurat')){
+          seur <- loomToSeurat_legacy(old_obj, list(obj))
+          if(identical(seur, -1)){
+            return(-2)
+          }else{
+            seur <- UpdateSeuratObject(seur)
+            SaveH5Seurat(seur, filename = sub("\\.h5ad$", ".h5Seurat", out_path))
+            Convert(sub("\\.h5ad$", ".h5Seurat", out_path), dest = "h5ad")
+          }
+        }else{
+          return(-3)
+        }
+      }
+    }else{
+      anndata <- import('anndata')
+      ad <- anndata$read_loom(file)
+      ad$write()
+    }
+  }else{
+    return(-4)
   }
   return(1)
 }
