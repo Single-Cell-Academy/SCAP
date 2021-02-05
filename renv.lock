@@ -291,6 +291,26 @@
       "Repository": "CRAN",
       "Hash": "6f4b7f84ec7b7fd33482a7c37892f0bd"
     },
+    "SeuratDisk": {
+      "Package": "SeuratDisk",
+      "Version": "0.0.0.9018",
+      "Source": "GitHub",
+      "Remotes": "satijalab/seurat-data",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "seurat-disk",
+      "RemoteUsername": "mojaveazure",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "003cdf0221e4ecd7a87e09e92e8f364ca782c2b6",
+      "Hash": "dac3134d351108f1aa1e5814501ef4e3"
+    },
+    "SeuratObject": {
+      "Package": "SeuratObject",
+      "Version": "4.0.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "0ac490e6dfe2e9f853b977ab9f101054"
+    },
     "SingleCellExperiment": {
       "Package": "SingleCellExperiment",
       "Version": "1.8.0",
