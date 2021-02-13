@@ -1,27 +1,3 @@
-#' Shiny app server function
-#'
-#' @import cowplot
-#' @import dplyr
-#' @import ggplot2
-#' @import ggthemes
-#' @import gtools
-#' @import hdf5r
-#' @import loomR
-#' @import Matrix
-#' @import MODIS
-#' @import plotly
-#' @import presto
-#' @import Seurat
-#' @import shiny
-#' @import shinycssloaders
-#' @import shinyFiles
-#' @import shinyjqui
-#' @import shinythemes
-#' @import rjson
-#' @import scPred
-#' @import data.table
-#' @import tidyr
-
 library("cowplot")
 library("dplyr")
 library("ggplot2")
@@ -47,41 +23,31 @@ library("tidyr")
 library("scibet")
 library("readr")
 library("reactable")
+library("reticulate")
+
+reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 
 #### Variables that persist across sessions
-
 ## Read in table with datasets available for scPred
 #datasets_scpred <- fread("../meta/SCAP_scpred_datasets.tsv")
 datasets_scibet <- fread("../meta/SciBet_reference_list.tsv")
+## Source functions
+source("SCAP_functions.R")
+
+anndata <- import('anndata')
 
 server <- function(input, output, session){
   session$onSessionEnded(stopApp)
   
   options(shiny.maxRequestSize=500*1024^2)
-  
+
+  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, reductions = NULL)
+
   ## Determine folders for ShinyDir button
-  #volumes <- c(projects = "/home/joel/SCAP/test_data/projects/) #getVolumes()
-  volumes <- c("FTP" = "/ftp",
-   Home = fs::path_home())
-
-  ## Source functions
-  source("SCAP_functions.R")
+  volumes <- c("FTP" = "/ftp", Home = fs::path_home())
   
-  # import data
-  output$data_used <- renderText({
-    if(!is.null(input$assay_1) & !is.na(input$directory[[1]][2])){
-      return(paste0("Chosen data: ", input$directory[[1]][2]))
-      }else{
-        return(paste0("Please select your data..."))
-      }
-      })
-  
-  # Old specification of directories
-  #shinyDirChoose(input, "directory", roots = volumes, session = session, restrictions = system.file(package = "base"))
-
   ## GenAP2 logo
   output$genap_logo <- renderImage({
-
     # Return a list containing the filename
     list(src = "./img/GenAP_powered_reg.png",
      contentType = 'image/png',
@@ -91,51 +57,45 @@ server <- function(input, output, session){
     }, deleteFile = FALSE)
 
   ## File directory
-  shinyDirChoose(input, "directory",
-   roots = volumes,
-   restrictions = system.file(package = "base"))
+  shinyFileChoose(input, "h5ad_in", roots = volumes, session = session)
   
-  # connect to .loom files in chosen dir
-  loom_data <- reactive({
-    req(input$directory)
-    path <- parseDirPath(volumes, input$directory)
-    if(identical(path, character(0))) return(NULL)
-    loom_files <- paste0(path,"/",list.files(path))
-    assays <- sub(".loom","",sub(paste0(".*/"),"",loom_files))
+  # connect to .h5ad files in chosen dir
+  h5ad_data <- reactive({
+    req(input$h5ad_in)
+    path <- parseFilePaths(selection = input$h5ad_in, roots = volumes)$datapath
+    if(is.integer(path[1]) || identical(path, character(0)) || identical(path, character(0))) return(NULL)
+    h5ad_files <- path#paste0(path,"/",list.files(path))
+    assays <- sub(".h5ad","",sub(paste0(".*/"),"",h5ad_files))
     data <- list()
-    ## Iterate over all assays and connect to loom objects
+    ## Iterate over all assays and connect to h5ad objects
     for(i in 1:length(assays)){
       data[[i]] <- tryCatch({
-        loomR::connect(loom_files[i], mode = "r+")
-        },
-        error = function(e){
-          showModal(modalDialog(p(paste0("An error occured trying to connect to ", loom_files[i],
-           ". It is possible that someone else is currently analyzing this file. Please wait for them to finish so your annotations do not conflict.")), title = "Error connecting to loom file."), session = getDefaultReactiveDomain())
-          return(NULL)
-          })
+        anndata$read(h5ad_files[i])
+      },
+      error = function(e){
+        showModal(modalDialog(p(paste0("An error occured trying to connect to ", h5ad_files[i])), title = "Error connecting to h5ad file."), session = getDefaultReactiveDomain())
+        return(NULL)
+      })
     }
     if(is.null(data)) return(NULL)
     if(length(data) != length(assays)) return(NULL)
     if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <- assays
+    rvalues$features <- rownames(data[[1]]$var)
+    rvalues$obs <- data[[1]]$obs_keys()
+    reductions <- data[[1]]$obsm$as_dict()
+    reduction_keys <- data[[1]]$obsm_keys()
+    r_names <- rownames(data[[1]]$obs)
+    for(i in 1:length(reductions)){
+      reductions[[i]] <- as.data.frame(reductions[[i]])
+      colnames(reductions[[i]]) <- paste0(reduction_keys[i], "_", 1:ncol(reductions[[i]]))
+      rownames(reductions[[i]]) <- r_names
+    }
+    names(reductions) <- reduction_keys
+    rvalues$reductions <- reductions
+    cat(file = stderr(), paste(str(rvalues)))
     return(data)
-    })
-  
-  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL)
-  
-  #-- Make the list of available metadata slots for plotting and comparing a reactive value--#
-  loom.trigger <- makeReactiveTrigger() # triggered when loom files are modified, e.g. metadata added to them
-  metadata_options <- reactive({
-    req(loom_data())
-    loom.trigger$depend()
-    cols <- names(loom_data()[[1]]$col.attrs)
-    grouping_options <- cols[grep('_meta_data$',cols)]
-    df <- loom_data()[[1]]$get.attribute.df(attributes = grouping_options)
-    pass <- unlist(lapply(grouping_options, function(x){length(unique(df[,x]))<100}))
-    grouping_options <- grouping_options[which(pass)]
-    return(grouping_options)
-    })
-
+  })
   
   ## Florian: What is this variable doing here? Why is it not reactive?
   marker_tables <- list()
@@ -158,520 +118,531 @@ server <- function(input, output, session){
   
   #-- select input for Assay --#
   output$assay_1 <- renderUI({
-    req(loom_data())
+    req(h5ad_data())
     selectInput('assay_1', "Select Assay", 
-      choices = names(loom_data()), 
-      selected = ifelse(any(names(loom_data())=="RNA"),
+      choices = names(h5ad_data()), 
+      selected = ifelse(any(names(h5ad_data())=="RNA"),
         yes = "RNA",
-        no = names(loom_data())[1]))
-    })
+        no = names(h5ad_data())[1]))
+  })
+
+  #-- Display name of data --#
+  output$data_used <- renderText({
+    if(!is.null(input$assay_1) & !is.na(input$h5ad_in[[1]][2])){
+      path <- sub(".*\\/", "", parseFilePaths(selection = input$h5ad_in, roots = volumes)$datapath)
+      return(paste0("Chosen data: ", path))
+    }else{
+      return(paste0("Please select your data..."))
+    }
+  })
   
   #-- select how to group cells --#
   output$grouping_1 <- renderUI({
-    req(input$assay_1, metadata_options())
-    grouping_options <- metadata_options()
+    req(input$assay_1, rvalues$obs)
     assay <- input$assay_1
-    if(any(grepl("seurat_clusters", sub("_meta_data","",grouping_options), ignore.case = FALSE))){
+    if(any(grepl("seurat_clusters", rvalues$obs, ignore.case = FALSE))){
       sel <- "seurat_clusters"
-      }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
-        sel <- paste0(tolower(assay),"_clusters")
-        }else{
-          sel <- sub("_meta_data","",grouping_options[1])
-        }
-        selectInput(inputId = 'grouping_1', label = 'Group By', choices = sub("_meta_data$","",metadata_options()), selected = sel, multiple = FALSE)
-        })
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"), rvalues$obs, ignore.case = TRUE))){
+      sel <- paste0(tolower(assay),"_clusters")
+    }else{
+      sel <- rvalues$obs[1]
+    }
+    selectInput(inputId = 'grouping_1', label = 'Group By', choices = rvalues$obs, selected = sel, multiple = FALSE)
+  })
   
   #-- select the clustering method --#
   output$reduction_1 <- renderUI({
     req(input$assay_1)
     assay <- input$assay_1
-    options <- names(loom_data()[[assay]]$col.attrs)
-    l.assay <- tolower(assay)
-    reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
-    sel <- if(any(grepl("umap_.*_2d", reductions))){
-      reductions[grep("umap_.*_2d", reductions)][1]
-      }else if(any(grepl("tsne_.*_2d", reductions))){
-        reductions[grep("tsne_.*_2d", reductions)][1]
-        }else if(any(grepl("pca_.*_2d", reductions))){
-          reductions[grep("pca_.*_2d", reductions)][1]
-          }else{
-            reductions[1]
-          }
-          selectInput(inputId = 'reduction_1', 'Choose Clustering Method', choices = as.list(reductions), selected = sel)
-          })
+    options <- names(rvalues$reductions)
+    sel <- if(any(grepl("umap", options, ignore.case = TRUE))){
+      options[grepl("umap", options, ignore.case = TRUE)][1]
+    }else if(any(grepl("tsne", options, ignore.case = TRUE))){
+      options[grepl("tsne", options, ignore.case = TRUE)][1]
+    }else{
+      options[1]
+    }
+    selectInput(inputId = 'reduction_1', 'Choose Clustering Method', choices = as.list(options), selected = sel)
+  })
   
   #-- select the features for the feature plot --#
   output$featureplot_1_feature.select <- renderUI({
     req(input$assay_1)
     assay <- input$assay_1
-    selectInput(inputId = 'featureplot_1_feature.select', label = 'Select a Feature to Visualize on the Feature Plot', choices = loom_data()[[assay]][['row_attrs/features']][], selected = loom_data()[[assay]][['row_attrs/features']][1], multiple = FALSE)
-    })
-  
-  output$featureplot_1_nebulosa_on<- renderUI({
-    req(input$assay_1)
-    selectInput(inputId = "nebulosa_on",
-                choices = c("yes","no"),
-                label = "Plot Nebulosa density instead of featureplot!",
-                selected = "no")
-  })
-  
-  #-- select the features for the feature plot --#
-  output$featureplot_1_features_nebulosa.select<- renderUI({
-    req(input$assay_1)
-    assay <- input$assay_1
-    selectInput(inputId = 'featureplot_1_feature_nebulosa.select', 
+    selectInput(inputId = 'featureplot_1_feature.select', 
                 label = 'Select a Feature to Visualize on the Feature Plot', 
-                choices = loom_data()[[assay]][['row_attrs/features']][], 
-                selected = loom_data()[[assay]][['row_attrs/features']][2], 
-                multiple = TRUE)
+                choices = rvalues$features, 
+                selected = rvalues$features[1], 
+                multiple = ifelse(input$nebulosa_on == "yes", TRUE, FALSE))
   })
   
   #-- select the featutres for the dot plot --#
   output$dotplot_1_feature_select<- renderUI({
     req(input$assay_1)
     assay <- input$assay_1
-    selectInput(inputId = 'dotplot_1_feature_select', label = 'Choose Features to Visualize on Dot Plot', choices = loom_data()[[assay]][['row_attrs/features']][], selected = loom_data()[[assay]][['row_attrs/features']][3], multiple = TRUE)
-    })
+
+    selectInput(inputId = 'dotplot_1_feature_select', 
+                label = 'Choose Features to Visualize on Dot Plot', 
+                choices = rvalues$features, 
+                selected = rvalues$features[1:2], 
+                multiple = TRUE)
+  })
   
   #-- visualize dotplot as a split dotplot --#
   output$do_split <- renderUI({
     req(input$assay_1)
     radioButtons(inputId = 'do_split', label = 'Split dot plot', choices = c('yes', 'no'), selected = 'no', inline = TRUE)
-    })
+  })
   
   #-- select how to split the dot plot --#
   output$split_by <- renderUI({
-    req(input$assay_1, metadata_options())
-    choices <- unlist(lapply(metadata_options(), function(x){
-      if(length(unique(loom_data()[[input$assay_1]]$col.attrs[[x]][]))>1){
+    req(input$assay_1, rvalues$obs)
+    choices <- unlist(lapply(rvalues$obs, function(x){
+      if(length(unique(h5ad_data()[[1]]$obs[x][,,drop=TRUE]))>1){
         return(x)
       }
-      }))
+    }))
     if(is.null(choices)){
       return("No conditions to split by.")
-      }else{
-        choices <- sub("_meta_data$","",choices[grepl('_meta_data$',choices)])
-        return(radioButtons(inputId = 'split_by', label = 'Choose how to split the data', choices = choices, inline = FALSE))
-      }
-      })
+    }else{
+      return(radioButtons(inputId = 'split_by', label = 'Choose how to split the data', choices = choices, inline = FALSE))
+    }
+  })
   
   #-- dimensional reduction plot coloured by cell groups --#
   output$dimplot_1 <- renderPlotly({
     req(input$grouping_1, input$reduction_1)
+    group.by <- list(h5ad_data()[[1]]$obs[input$grouping_1][,,drop=TRUE])
+    names(group.by) <- input$grouping_1
+    names(group.by[[1]]) <- rownames(rvalues$reductions)
     dimPlotlyOutput(assay.in = input$assay_1, 
-      reduc.in = input$reduction_1, 
-      group.by = input$grouping_1, 
-      annot_panel = "", 
-      low.res = 'yes', 
-      data = loom_data())
-    })
+                    reduc.in = rvalues$reductions[[input$reduction_1]], 
+                    group.by = group.by, 
+                    annot_panel = "", 
+                    low.res = 'yes')
+  })
   
   #-- dimensional reduction plot coloured by feature expression --#
   output$featureplot_1 <- renderPlotly({
-    req(input$featureplot_1_feature.select)
+    req(input$grouping_1, input$reduction_1, input$featureplot_1_feature.select)
+    group.by <- list(h5ad_data()[[1]]$obs[input$grouping_1][,,drop=TRUE])
+    names(group.by) <- input$grouping_1
+    names(group.by[[1]]) <- rownames(rvalues$reductions)
+    feature.in <- as.data.frame(h5ad_data()[[1]]$X[,match(input$featureplot_1_feature.select, rvalues$features)])
+    colnames(feature.in) <- input$featureplot_1_feature.select
     featurePlotlyOutput(assay.in = input$assay_1,
-      reduc.in = input$reduction_1,
-      group.by = input$grouping_1,
-      feature.in = input$featureplot_1_feature.select,
-      low.res = 'yes', data = loom_data())
+                        reduc.in = rvalues$reductions[[input$reduction_1]],
+                        group.by = group.by,
+                        feature.in = feature.in,
+                        low.res = 'yes')
     })
   
   #-- dimensional reduction plot coloured by feature expression --#
   output$featureplot_1_nebulosa <- renderPlot({
-    req(input$featureplot_1_feature_nebulosa.select)
+    req(input$grouping_1, input$featureplot_1_feature.select)
+    group.by <- h5ad_data()[[1]]$obs[input$grouping_1][,,drop=FALSE]
+    feature.in <- as.data.frame(h5ad_data()[[1]]$X[,match(input$featureplot_1_feature.select, rvalues$features)])
+    colnames(feature.in) <- input$featureplot_1_feature.select
+    rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
     featurePlotlyOutput_nebulosa(assay.in = input$assay_1,
-      reduc.in = input$reduction_1,
-      group.by = input$grouping_1,
-      features.in = input$featureplot_1_feature_nebulosa.select,
-      low.res = 'yes', data = loom_data())
+                                  reduc.in = rvalues$reductions[[input$reduction_1]],
+                                  group.by = group.by,
+                                  feature.in = feature.in,
+                                  low.res = 'yes')
   })
   
   #-- dot plot for selected feature expression --#
   dot_plot <- reactive({
     req(input$dotplot_1_feature_select)
-    
-    group.by <- input$grouping_1
+
     assay <- input$assay_1
-    
+
     ax.x <- list(
-      title = "Features",
-      zeroline = FALSE,
-      showline = TRUE,
-      showticklabels = TRUE,
-      showgrid = FALSE,
-      mirror=TRUE,
-      ticks='outside',
-      tickangle = -45
-      )
+    title = "Features",
+    zeroline = FALSE,
+    showline = TRUE,
+    showticklabels = TRUE,
+    showgrid = FALSE,
+    mirror=TRUE,
+    ticks='outside',
+    tickangle = -45
+    )
     ax.y <- list(
-      title = "Identity",
-      zeroline = FALSE,
-      showline = TRUE,
-      showticklabels = TRUE,
-      showgrid = FALSE,
-      mirror=TRUE,
-      ticks='outside'
-      )
+    title = "Identity",
+    zeroline = FALSE,
+    showline = TRUE,
+    showticklabels = TRUE,
+    showgrid = FALSE,
+    mirror=TRUE,
+    ticks='outside'
+    )
     
+    data.features <- as.data.frame(h5ad_data()[[1]]$X[,match(input$dotplot_1_feature_select, rvalues$features)])
+    colnames(data.features) <- input$dotplot_1_feature_select
+    rownames(data.features) <- rownames(rvalues$reductions)
+    data.features$id <- h5ad_data()[[1]]$obs[input$grouping_1][,,drop=TRUE]
+
     if(input$do_split == 'yes' & !is.null(input$split_by)){
-      p <- split_dot_plot(data = loom_data()[[assay]], features = input$dotplot_1_feature_select, group.by = group.by, split.by = input$split_by)
+      splits = list(h5ad_data()[[1]]$obs[input$split_by][,,drop=TRUE])
+      names(splits) <- input$split_by
+      p <- split_dot_plot(data.features = data.features, features = input$dotplot_1_feature_select, assay = assay, split.by = splits)
       if(is.null(p)) return(NULL)
       if(identical(class(p),"shiny.tag")) return(NULL)
       return(p)
-      }else if(input$do_split == 'no'){
-        p <- dotPlot(data = loom_data()[[assay]], assay = assay, features = input$dotplot_1_feature_select, group.by = group.by)
-        if(is.null(p)) return(NULL)
-        if(identical(class(p),"shiny.tag")) return(NULL)
-        
-        p <- p + guides(color = guide_colourbar(order = 1, title = "Average Expression"), size = guide_legend(order = 2, title = "Percent Expressed")) + theme_few()
-        
-        return(p)
-        }else{
-          return(-1)
-        }
-        })
+    }else if(input$do_split == 'no'){
+      p <- dotPlot(data.features = data.features, features = input$dotplot_1_feature_select, assay = assay)
+      if(is.null(p)){
+        return(NULL)
+      }
+      if(identical(class(p),"shiny.tag")) return(NULL)
+      p <- p + guides(color = guide_colourbar(order = 1, title = "Average Expression"), size = guide_legend(order = 2, title = "Percent Expressed")) + theme_few()
+      return(p)
+    }else{
+      return(-1)
+    }
+  })
   
   output$dotplot_1 <- renderUI({
     req(dot_plot())
     if(input$do_split == 'yes' && is.null(input$split_by)){
       output$choose_splits <- renderText({
         return('Please choose how to split the data')
-        })
+      })
       return(h2(textOutput('choose_splits')))
-      }else{
-        output$plot <- renderPlot({
-          return(dot_plot())
-          })
-        return(plotOutput('plot'))
-      }
+    }else{
+      output$plot <- renderPlot({
+        return(dot_plot())
       })
-  
-  
-  ###==============// ANNOTATION TAB //==============####
-  
-  #-- select input for Assay --#
-  output$assay_2 <- renderUI({
-    req(loom_data())
-    selectInput('assay_2', "Select Assay", choices = names(loom_data()), selected = ifelse(any(names(loom_data())=="RNA"),yes = "RNA",no = names(loom_data())[1]))
-    })
-  
-  to_listen <- reactive({
-    list(input$assay_2, loom_data())
-    })
-  #-- initialize/reset tmp_annotations --#
-  observeEvent(to_listen(),{
-    req(input$assay_2, loom_data())
-    rvalues$tmp_annotations <- rep("unlabled", loom_data()[[input$assay_2]]$shape[2])
-    names(rvalues$tmp_annotations) <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
-    })
-  
-  #-- select how to group cells --#
-  output$grouping_2 <- renderUI({
-    req(input$assay_2, metadata_options())
-    grouping_options <- metadata_options()
-    assay <- input$assay_2
-    if(any(grepl("seurat_clusters", sub("_meta_data","",grouping_options), ignore.case = FALSE))){
-      sel <- "seurat_clusters"
-      }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
-        sel <- paste0(tolower(assay),"_clusters")
-        }else{
-          sel <- sub("_meta_data","",grouping_options[1])
-        }
-        selectInput(inputId = 'grouping_2', label = 'Group By', choices = sub("_meta_data$","",metadata_options()), selected = sel, multiple = FALSE)
-        })
-  
-  #-- select the clustering method --#
-  output$reduction_2 <- renderUI({
-    req(input$assay_2)
-    assay <- input$assay_2
-    options <- names(loom_data()[[assay]]$col.attrs)[grep("_2d",names(loom_data()[[assay]]$col.attrs))]
-    l.assay <- tolower(assay)
-    reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
-    sel <- if(any(grepl("umap_.*_2d", reductions))){
-      reductions[grep("umap_.*_2d", reductions)][1]
-      }else if(any(grepl("tsne_.*_2d", reductions))){
-        reductions[grep("tsne_.*_2d", reductions)][1]
-        }else if(any(grepl("pca_.*_2d", reductions))){
-          reductions[grep("pca_.*_2d", reductions)][1]
-          }else{
-            reductions[1]
-          }
-          selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(reductions), selected = sel)
-          })
-  
-  #-- select the featutres for the feature plot --#
-  output$featureplot_2_feature_select<- renderUI({
-    req(input$assay_2)
-    assay <- input$assay_2
-    choices <- loom_data()[[assay]][['row_attrs/features']][]
-    selectInput(inputId = 'featureplot_2_feature_select', label = 'Select a Feature to Visualize on the Feature Plot', choices = choices, selected = choices[1], multiple = FALSE)
-    })
-  
-  #-- display cells that were selected in a table --#
-  output$selected_cells <- renderTable({
-    req(input$assay_2)
-    selected_cells <- as.data.frame(event_data("plotly_selected")$key, stringsAsFactors = FALSE)
-    if (is.null(selected_cells) | ncol(selected_cells) == 0 | nrow(selected_cells) == 0){
-      rvalues$cells <- NULL
-      return("Click and drag on either plot to select cells for marker identification (i.e., select/lasso) (double-click on either plot to clear selection)")
-      }else if(ncol(selected_cells)>1){
-        selected_cells <- as.data.frame(as.character(selected_cells[1,]),stringsAsFactors = F)
-      }
-      colnames(selected_cells) <- ""
-      rvalues$cells <- selected_cells
-      selected_cells
-      })
-  
-  #-- dimensional reduction plot coloured by cell groups --#
-  output$dimplot_2 <- renderPlotly({
-    req(input$assay_2, metadata_options())
-    dimPlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, annot_panel = input$annot_panel, tmp_annotations = rvalues$tmp_annotations, low.res = 'yes', data = loom_data())
-    })
-  
-  #-- dimensional reduction plot coloured by feature expression --#
-  output$featureplot_2 <- renderPlotly({
-    req(input$featureplot_2_feature_select)
-    featurePlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, feature.in = input$featureplot_2_feature_select, low.res = 'yes', data = loom_data())
-    })
-  
-  #-- Find the markers for the 1) selected cells compared to all other cells or
-  #-- 2) the markers that define each group. Depending on if cells are selected or not
-  observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-    output$markers <- DT::renderDataTable({
-      req(input$assay_2, metadata_options())
-      cells <- isolate(rvalues$cells)
-      grouping <- paste0(input$grouping_2,"_meta_data")
-      if(!any(names(loom_data()[[input$assay_2]]$col.attrs) == grouping)){
-        return(NULL)
-      }
-      group_assay <- paste(input$grouping_2, input$assay_2, sep = '_')
-      if(any(group_assay %in% names(marker_tables)) & is.null(cells)){
-        t <- marker_tables[[group_assay]]
-        }else{
-          y <- loom_data()[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
-          cell_ids <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
-          cols <- unlist(lapply(cells[,1], function(x){
-            grep(x ,cell_ids, fixed = TRUE)
-            }))
-          if(!is.null(cells)){
-            y[cols] <- 'Selected'
-          }
-          if(length(unique(y))==1){
-            showModal(modalDialog(p("Must have at least 2 groups defined to use Find Markers."), title = "Warning"), session = getDefaultReactiveDomain())
-            return(NULL)
-          }
-        #t <- as.data.frame(top_markers(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y), n = 10))[1:10,]
-        exp_mat <- Matrix::t(Matrix::Matrix(loom_data()[[input$assay_2]]$matrix[,], sparse = TRUE))
-        rownames(exp_mat) <- loom_data()[[input$assay_2]]$row.attrs$features[]
-        colnames(exp_mat) <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
-        t <- as.data.frame(wilcoxauc(X = exp_mat, y = y))
-        t <- t[-c(5,6)]
-        t$Specificity <- t$pct_in/(t$pct_out+1)
-        if(is.null(cells)){
-          marker_tables[[group_assay]] <<- t
-        }
-      }
-      if(!is.null(cells)){
-        t <- t[which(t$group == "Selected"),]
-      }
-      return(t %>% arrange(desc(Specificity)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3))
-      })
-    })
-  
-  #-- display selected grouping name --#
-  output$annotation_title <- renderText({
-    req(input$grouping_2, metadata_options())
-    return(paste0(input$grouping_2))
-    })
-  
-  #-- display text boxes for user to enter new IDs for the meta data --#
-  output$annotations <- renderUI({
-    req(input$assay_2, metadata_options())
-    group.by <- paste0(input$grouping_2,'_meta_data')
-    if(!group.by%in%names(loom_data()[[input$assay_2]]$col.attrs)){
-      return(NULL)
+      return(plotOutput('plot'))
     }
-    names <- unique(loom_data()[[input$assay_2]][[paste0('col_attrs/',group.by)]][])
-    names <- mixedsort(names)
-    id <- "my_annot"
-    lapply(1:length(names), function(x){
-      textInput(inputId = paste0(names[x],"_",id), label = names[x], placeholder = names[x])
-      })
-    })
+  })
   
-  #-- add user defined annotations to selected cells --#
-  observeEvent(input$add_to_tmp,{
-    if(is.null(rvalues$cells)){
-      showNotification("Please select cells from either plot first", type = 'warning')
-      }else if(is.null(input$custom_name) | input$custom_name == ""){
-        showNotification("Please enter an annotation name", type = 'warning')
-        }else{
-          rvalues$tmp_annotations[which(names(rvalues$tmp_annotations)%in%rvalues$cells[,1])] <- input$custom_name
-        }
-        })
+  
+#   ###==============// ANNOTATION TAB //==============####
+  
+#   #-- select input for Assay --#
+#   output$assay_2 <- renderUI({
+#     req(loom_data())
+#     selectInput('assay_2', "Select Assay", choices = names(loom_data()), selected = ifelse(any(names(loom_data())=="RNA"),yes = "RNA",no = names(loom_data())[1]))
+#     })
+  
+#   to_listen <- reactive({
+#     list(input$assay_2, loom_data())
+#     })
+#   #-- initialize/reset tmp_annotations --#
+#   observeEvent(to_listen(),{
+#     req(input$assay_2, loom_data())
+#     rvalues$tmp_annotations <- rep("unlabled", loom_data()[[input$assay_2]]$shape[2])
+#     names(rvalues$tmp_annotations) <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
+#     })
+  
+#   #-- select how to group cells --#
+#   output$grouping_2 <- renderUI({
+#     req(input$assay_2, metadata_options())
+#     grouping_options <- metadata_options()
+#     assay <- input$assay_2
+#     if(any(grepl("seurat_clusters", sub("_meta_data","",grouping_options), ignore.case = FALSE))){
+#       sel <- "seurat_clusters"
+#       }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
+#         sel <- paste0(tolower(assay),"_clusters")
+#         }else{
+#           sel <- sub("_meta_data","",grouping_options[1])
+#         }
+#         selectInput(inputId = 'grouping_2', label = 'Group By', choices = sub("_meta_data$","",metadata_options()), selected = sel, multiple = FALSE)
+#         })
+  
+#   #-- select the clustering method --#
+#   output$reduction_2 <- renderUI({
+#     req(input$assay_2)
+#     assay <- input$assay_2
+#     options <- names(loom_data()[[assay]]$col.attrs)[grep("_2d",names(loom_data()[[assay]]$col.attrs))]
+#     l.assay <- tolower(assay)
+#     reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
+#     sel <- if(any(grepl("umap_.*_2d", reductions))){
+#       reductions[grep("umap_.*_2d", reductions)][1]
+#       }else if(any(grepl("tsne_.*_2d", reductions))){
+#         reductions[grep("tsne_.*_2d", reductions)][1]
+#         }else if(any(grepl("pca_.*_2d", reductions))){
+#           reductions[grep("pca_.*_2d", reductions)][1]
+#           }else{
+#             reductions[1]
+#           }
+#           selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(reductions), selected = sel)
+#           })
+  
+#   #-- select the featutres for the feature plot --#
+#   output$featureplot_2_feature_select<- renderUI({
+#     req(input$assay_2)
+#     assay <- input$assay_2
+#     choices <- loom_data()[[assay]][['row_attrs/features']][]
+#     selectInput(inputId = 'featureplot_2_feature_select', label = 'Select a Feature to Visualize on the Feature Plot', choices = choices, selected = choices[1], multiple = FALSE)
+#     })
+  
+#   #-- display cells that were selected in a table --#
+#   output$selected_cells <- renderTable({
+#     req(input$assay_2)
+#     selected_cells <- as.data.frame(event_data("plotly_selected")$key, stringsAsFactors = FALSE)
+#     if (is.null(selected_cells) | ncol(selected_cells) == 0 | nrow(selected_cells) == 0){
+#       rvalues$cells <- NULL
+#       return("Click and drag on either plot to select cells for marker identification (i.e., select/lasso) (double-click on either plot to clear selection)")
+#       }else if(ncol(selected_cells)>1){
+#         selected_cells <- as.data.frame(as.character(selected_cells[1,]),stringsAsFactors = F)
+#       }
+#       colnames(selected_cells) <- ""
+#       rvalues$cells <- selected_cells
+#       selected_cells
+#       })
+  
+#   #-- dimensional reduction plot coloured by cell groups --#
+#   output$dimplot_2 <- renderPlotly({
+#     req(input$assay_2, metadata_options())
+#     dimPlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, annot_panel = input$annot_panel, tmp_annotations = rvalues$tmp_annotations, low.res = 'yes', data = loom_data())
+#     })
+  
+#   #-- dimensional reduction plot coloured by feature expression --#
+#   output$featureplot_2 <- renderPlotly({
+#     req(input$featureplot_2_feature_select)
+#     featurePlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, feature.in = input$featureplot_2_feature_select, low.res = 'yes', data = loom_data())
+#     })
+  
+#   #-- Find the markers for the 1) selected cells compared to all other cells or
+#   #-- 2) the markers that define each group. Depending on if cells are selected or not
+#   observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
+#     output$markers <- DT::renderDataTable({
+#       req(input$assay_2, metadata_options())
+#       cells <- isolate(rvalues$cells)
+#       grouping <- paste0(input$grouping_2,"_meta_data")
+#       if(!any(names(loom_data()[[input$assay_2]]$col.attrs) == grouping)){
+#         return(NULL)
+#       }
+#       group_assay <- paste(input$grouping_2, input$assay_2, sep = '_')
+#       if(any(group_assay %in% names(marker_tables)) & is.null(cells)){
+#         t <- marker_tables[[group_assay]]
+#         }else{
+#           y <- loom_data()[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
+#           cell_ids <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
+#           cols <- unlist(lapply(cells[,1], function(x){
+#             grep(x ,cell_ids, fixed = TRUE)
+#             }))
+#           if(!is.null(cells)){
+#             y[cols] <- 'Selected'
+#           }
+#           if(length(unique(y))==1){
+#             showModal(modalDialog(p("Must have at least 2 groups defined to use Find Markers."), title = "Warning"), session = getDefaultReactiveDomain())
+#             return(NULL)
+#           }
+#         #t <- as.data.frame(top_markers(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y), n = 10))[1:10,]
+#         exp_mat <- Matrix::t(Matrix::Matrix(loom_data()[[input$assay_2]]$matrix[,], sparse = TRUE))
+#         rownames(exp_mat) <- loom_data()[[input$assay_2]]$row.attrs$features[]
+#         colnames(exp_mat) <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
+#         t <- as.data.frame(wilcoxauc(X = exp_mat, y = y))
+#         t <- t[-c(5,6)]
+#         t$Specificity <- t$pct_in/(t$pct_out+1)
+#         if(is.null(cells)){
+#           marker_tables[[group_assay]] <<- t
+#         }
+#       }
+#       if(!is.null(cells)){
+#         t <- t[which(t$group == "Selected"),]
+#       }
+#       return(t %>% arrange(desc(Specificity)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3))
+#       })
+#     })
+  
+#   #-- display selected grouping name --#
+#   output$annotation_title <- renderText({
+#     req(input$grouping_2, metadata_options())
+#     return(paste0(input$grouping_2))
+#     })
+  
+#   #-- display text boxes for user to enter new IDs for the meta data --#
+#   output$annotations <- renderUI({
+#     req(input$assay_2, metadata_options())
+#     group.by <- paste0(input$grouping_2,'_meta_data')
+#     if(!group.by%in%names(loom_data()[[input$assay_2]]$col.attrs)){
+#       return(NULL)
+#     }
+#     names <- unique(loom_data()[[input$assay_2]][[paste0('col_attrs/',group.by)]][])
+#     names <- mixedsort(names)
+#     id <- "my_annot"
+#     lapply(1:length(names), function(x){
+#       textInput(inputId = paste0(names[x],"_",id), label = names[x], placeholder = names[x])
+#       })
+#     })
+  
+#   #-- add user defined annotations to selected cells --#
+#   observeEvent(input$add_to_tmp,{
+#     if(is.null(rvalues$cells)){
+#       showNotification("Please select cells from either plot first", type = 'warning')
+#       }else if(is.null(input$custom_name) | input$custom_name == ""){
+#         showNotification("Please enter an annotation name", type = 'warning')
+#         }else{
+#           rvalues$tmp_annotations[which(names(rvalues$tmp_annotations)%in%rvalues$cells[,1])] <- input$custom_name
+#         }
+#         })
 
-  #-- save user defined annotations --#
-  observeEvent(input$set_cell_types, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-    req(metadata_options())
-    group.by <- paste0(input$grouping_2,'_meta_data')
-    id <- "my_annot"
-    if(is.null(input$new_scheme_name) || input$new_scheme_name == "" || input$new_scheme_name == " "){
-      showNotification("Please name the annotation scheme", type = 'warning')
-      }else if(input$annot_panel == 'cell_annotation_cluster'){
-        names <- loom_data()[[input$assay_2]][[paste0('col_attrs/',group.by)]][]
-        new <- names
-        names <- unique(names)
-        for(i in 1:length(names)){
-          new[which(new == names[i])] <- input[[paste0(names[i],"_",id)]]
-          if(is.null(input[[paste0(names[i],"_",id)]]) | input[[paste0(names[i],"_",id)]] == ""){
-            showNotification("Names must be provided for each group", type = 'warning')
-            return()
-          }
-        }
-        new <- list(new)
-        names(new) <- input$new_scheme_name
-        if(!grepl("_meta_data$",names(new))) names(new) <- paste0(names(new),"_meta_data")
-        for(i in 1:length(loom_data())){
-          loom_data()[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
-        }
-        }else{
-          if(all(rvalues$tmp_annotations=='unlabled')){
-            showNotification("No annotations have been added", type = 'warning')
-            }else if(is.null(input$new_scheme_name) | input$new_scheme_name==""){
-              showNotification("Please enter an name for the annotation scheme", type = 'warning')
-              }else{
-                new <- list(rvalues$tmp_annotations)
-                names(new) <- input$new_scheme_name
-                if(!grepl("_meta_data$",names(new))){
-                  names(new) <- paste0(names(new),"_meta_data")
-                }
-                for(i in 1:length(loom_data())){
-                  loom_data()[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
-                } 
-              }
-            }
-            loom.trigger$trigger()
-            })
+#   #-- save user defined annotations --#
+#   observeEvent(input$set_cell_types, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
+#     req(metadata_options())
+#     group.by <- paste0(input$grouping_2,'_meta_data')
+#     id <- "my_annot"
+#     if(is.null(input$new_scheme_name) || input$new_scheme_name == "" || input$new_scheme_name == " "){
+#       showNotification("Please name the annotation scheme", type = 'warning')
+#       }else if(input$annot_panel == 'cell_annotation_cluster'){
+#         names <- loom_data()[[input$assay_2]][[paste0('col_attrs/',group.by)]][]
+#         new <- names
+#         names <- unique(names)
+#         for(i in 1:length(names)){
+#           new[which(new == names[i])] <- input[[paste0(names[i],"_",id)]]
+#           if(is.null(input[[paste0(names[i],"_",id)]]) | input[[paste0(names[i],"_",id)]] == ""){
+#             showNotification("Names must be provided for each group", type = 'warning')
+#             return()
+#           }
+#         }
+#         new <- list(new)
+#         names(new) <- input$new_scheme_name
+#         if(!grepl("_meta_data$",names(new))) names(new) <- paste0(names(new),"_meta_data")
+#         for(i in 1:length(loom_data())){
+#           loom_data()[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
+#         }
+#         }else{
+#           if(all(rvalues$tmp_annotations=='unlabled')){
+#             showNotification("No annotations have been added", type = 'warning')
+#             }else if(is.null(input$new_scheme_name) | input$new_scheme_name==""){
+#               showNotification("Please enter an name for the annotation scheme", type = 'warning')
+#               }else{
+#                 new <- list(rvalues$tmp_annotations)
+#                 names(new) <- input$new_scheme_name
+#                 if(!grepl("_meta_data$",names(new))){
+#                   names(new) <- paste0(names(new),"_meta_data")
+#                 }
+#                 for(i in 1:length(loom_data())){
+#                   loom_data()[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
+#                 } 
+#               }
+#             }
+#             loom.trigger$trigger()
+#             })
   
-  #-- genes to search from for ncbi query --#
-  output$gene_query <- renderUI({
-    req(input$assay_2)
-    assay <- input$assay_2
-    selectInput(inputId = 'gene_query', label = 'Select a gene of interest to learn more', choices = loom_data()[[assay]][['row_attrs/features']][], selected = NA, multiple = FALSE)
-    })
+#   #-- genes to search from for ncbi query --#
+#   output$gene_query <- renderUI({
+#     req(input$assay_2)
+#     assay <- input$assay_2
+#     selectInput(inputId = 'gene_query', label = 'Select a gene of interest to learn more', choices = loom_data()[[assay]][['row_attrs/features']][], selected = NA, multiple = FALSE)
+#     })
   
-  #-- get gene summary from ncbi --#
-  observeEvent(input$query_ncbi,{
-    if(is.null(input$gene_query) | is.na(input$gene_query) | identical(input$gene_query, "") | identical(input$gene_query, " ")){
-      showNotification("A valid gene must be entered", type = "error")
-      return(NULL)
-    }
-    id <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=gene&term=", input$gene_query, "[sym]+AND+",input$organism,"[orgn]&retmode=json"))$esearchresult$idlist
-    #print(id)
-    if(identical(id, list())){
-      output$gene_summary <- renderText({"Error: No genes matching this query were found on NCBI"})
-      }else{
-        if(length(id)>1){
-          showNotification('Caution: More that one gene matched this query. Only showing first match', type = 'warning')
-          id <- id[1]
-        }
-        output$gene_summary <- renderText({
-          results <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=gene&id=",id,"&retmode=json"))$result[[2]]
-        #print(str(results))
-        name <- results$name
-        #print(name)
-        alias <- results$otheraliases
-        #print(alias)
-        summary <- results$summary
-        #print(summary)
-        return(paste0("[id=",id,"][name=",name,"][aliases=", paste(alias, collapse = " "),"][summary=",summary,"]"))
-        })
-      }
-      })
+#   #-- get gene summary from ncbi --#
+#   observeEvent(input$query_ncbi,{
+#     if(is.null(input$gene_query) | is.na(input$gene_query) | identical(input$gene_query, "") | identical(input$gene_query, " ")){
+#       showNotification("A valid gene must be entered", type = "error")
+#       return(NULL)
+#     }
+#     id <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=gene&term=", input$gene_query, "[sym]+AND+",input$organism,"[orgn]&retmode=json"))$esearchresult$idlist
+#     #print(id)
+#     if(identical(id, list())){
+#       output$gene_summary <- renderText({"Error: No genes matching this query were found on NCBI"})
+#       }else{
+#         if(length(id)>1){
+#           showNotification('Caution: More that one gene matched this query. Only showing first match', type = 'warning')
+#           id <- id[1]
+#         }
+#         output$gene_summary <- renderText({
+#           results <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=gene&id=",id,"&retmode=json"))$result[[2]]
+#         #print(str(results))
+#         name <- results$name
+#         #print(name)
+#         alias <- results$otheraliases
+#         #print(alias)
+#         summary <- results$summary
+#         #print(summary)
+#         return(paste0("[id=",id,"][name=",name,"][aliases=", paste(alias, collapse = " "),"][summary=",summary,"]"))
+#         })
+#       }
+#       })
   
   
   
-  ###==============// CUSTOM META DATA TAB //==============####
+#   ###==============// CUSTOM META DATA TAB //==============####
   
-  #-- select input for Assay --#
-  output$assay_3 <- renderUI({
-    req(loom_data())
-    selectInput('assay_3', "Select Assay", choices = names(loom_data()), selected = ifelse(any(names(loom_data())=="RNA"),yes = "RNA",no = names(loom_data())[1]))
-    })
+#   #-- select input for Assay --#
+#   output$assay_3 <- renderUI({
+#     req(loom_data())
+#     selectInput('assay_3', "Select Assay", choices = names(loom_data()), selected = ifelse(any(names(loom_data())=="RNA"),yes = "RNA",no = names(loom_data())[1]))
+#     })
   
-  #-- select meta data to combine --#
-  output$meta_group_checkbox <- renderUI({
-    req(input$assay_3, loom_data())
-    choices <- metadata_options()
-    choices <- sub('_meta_data','',choices)
-    checkboxGroupInput(inputId = 'meta_group_checkbox', label = 'Meta Data', choices = choices)
-    })
+#   #-- select meta data to combine --#
+#   output$meta_group_checkbox <- renderUI({
+#     req(input$assay_3, loom_data())
+#     choices <- metadata_options()
+#     choices <- sub('_meta_data','',choices)
+#     checkboxGroupInput(inputId = 'meta_group_checkbox', label = 'Meta Data', choices = choices)
+#     })
   
-  #-- display the order of the selected meta data --#
-  output$example_meta_group_name <- renderText({
-    req(loom_data())
-    if(is.null(rvalues$order) || is.na(rvalues$order) || length(rvalues$order) == 0){
-      return(NULL)
-    }
-    paste(sub('_meta_data$','',rvalues$order),collapse=" + ")
-    })
+#   #-- display the order of the selected meta data --#
+#   output$example_meta_group_name <- renderText({
+#     req(loom_data())
+#     if(is.null(rvalues$order) || is.na(rvalues$order) || length(rvalues$order) == 0){
+#       return(NULL)
+#     }
+#     paste(sub('_meta_data$','',rvalues$order),collapse=" + ")
+#     })
   
-  #-- display a sample of what the combined meta data will resemble --#
-  output$example_meta_group <- renderTable({
-    req(input$assay_3)
-    if(is.null(rvalues$order) || is.na(rvalues$order) || length(rvalues$order) == 0){
-      return(NULL)
-    }
-    ex <- loom_data()[[input$assay_3]]$get.attribute.df(attributes = rvalues$order)
-    ex_df <- as.data.frame(apply(X = ex, MARGIN = 1, FUN = paste, collapse = '_'), stringsAsFactors = FALSE)[sample(x = 1:nrow(ex),size = 20,replace = FALSE),,drop=F]
-    colnames(ex_df) <- 'Examples of chosen meta data combination'
-    return(ex_df)
-    }, hover = TRUE, width = '100%',align = 'c')
+#   #-- display a sample of what the combined meta data will resemble --#
+#   output$example_meta_group <- renderTable({
+#     req(input$assay_3)
+#     if(is.null(rvalues$order) || is.na(rvalues$order) || length(rvalues$order) == 0){
+#       return(NULL)
+#     }
+#     ex <- loom_data()[[input$assay_3]]$get.attribute.df(attributes = rvalues$order)
+#     ex_df <- as.data.frame(apply(X = ex, MARGIN = 1, FUN = paste, collapse = '_'), stringsAsFactors = FALSE)[sample(x = 1:nrow(ex),size = 20,replace = FALSE),,drop=F]
+#     colnames(ex_df) <- 'Examples of chosen meta data combination'
+#     return(ex_df)
+#     }, hover = TRUE, width = '100%',align = 'c')
   
-  #-- update the 'order' global variable whenever the checkbox group is selected/deselected --#
-  observeEvent(input$meta_group_checkbox, ignoreNULL = F,{
-    req(loom_data())
-    if(!is.null(input$meta_group_checkbox)){
-      new <- paste0(input$meta_group_checkbox,'_meta_data')
-      if(length(new)>length(rvalues$order) | is.null(rvalues$order)){
-        new <- new[!new%in%rvalues$order]
-        rvalues$order <- c(rvalues$order, new)
-        }else if(identical(new, character(0))){
-          rvalues$order <- NULL
-          }else{
-            rvalues$order <- rvalues$order[-which(!rvalues$order%in%new)]
-          }
-          }else{
-            rvalues$order <- NULL
-          }
-          })
+#   #-- update the 'order' global variable whenever the checkbox group is selected/deselected --#
+#   observeEvent(input$meta_group_checkbox, ignoreNULL = F,{
+#     req(loom_data())
+#     if(!is.null(input$meta_group_checkbox)){
+#       new <- paste0(input$meta_group_checkbox,'_meta_data')
+#       if(length(new)>length(rvalues$order) | is.null(rvalues$order)){
+#         new <- new[!new%in%rvalues$order]
+#         rvalues$order <- c(rvalues$order, new)
+#         }else if(identical(new, character(0))){
+#           rvalues$order <- NULL
+#           }else{
+#             rvalues$order <- rvalues$order[-which(!rvalues$order%in%new)]
+#           }
+#           }else{
+#             rvalues$order <- NULL
+#           }
+#           })
   
-  #-- add custom metadata grouping to loom file --#
-  observeEvent(input$add_new_meta_group,{
-    if(is.null(input$meta_group_checkbox) || length(input$meta_group_checkbox)<2){
-      showNotification('At least two meta data groups must be selected!', type = 'error')
-      }else if(is.null(input$new_meta_group) || input$new_meta_group == ''){
-        showNotification('A name for the meta data must be provided!', type = 'error')
-        }else if(paste0(input$new_meta_group,'_meta_data') %in% names(loom_data()[[input$assay_3]]$col.attrs)){
-          showNotification('The chosen meta data name already exists! Please select a unique name.', type = 'error')
-          }else{
-            ex <- loom_data()[[input$assay_3]]$get.attribute.df(attributes = rvalues$order)
-            ex_list <- list(apply(X = ex, MARGIN = 1, FUN = paste, collapse = '_'))
-            if(grepl('_meta_data$', input$new_meta_group)==FALSE){
-              names(ex_list) <- paste0(input$new_meta_group,'_meta_data')
-              }else{
-                names(ex_list) <- input$new_meta_group
-              }
-              showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after completion"), session = getDefaultReactiveDomain())
-              Sys.sleep(2)
-              for(i in 1:length(loom_data())){
-                loom_data()[[i]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
-              }
-              loom.trigger$trigger()
-              Sys.sleep(2)
-              removeModal(session = getDefaultReactiveDomain())
-            }
-            })
+#   #-- add custom metadata grouping to loom file --#
+#   observeEvent(input$add_new_meta_group,{
+#     if(is.null(input$meta_group_checkbox) || length(input$meta_group_checkbox)<2){
+#       showNotification('At least two meta data groups must be selected!', type = 'error')
+#       }else if(is.null(input$new_meta_group) || input$new_meta_group == ''){
+#         showNotification('A name for the meta data must be provided!', type = 'error')
+#         }else if(paste0(input$new_meta_group,'_meta_data') %in% names(loom_data()[[input$assay_3]]$col.attrs)){
+#           showNotification('The chosen meta data name already exists! Please select a unique name.', type = 'error')
+#           }else{
+#             ex <- loom_data()[[input$assay_3]]$get.attribute.df(attributes = rvalues$order)
+#             ex_list <- list(apply(X = ex, MARGIN = 1, FUN = paste, collapse = '_'))
+#             if(grepl('_meta_data$', input$new_meta_group)==FALSE){
+#               names(ex_list) <- paste0(input$new_meta_group,'_meta_data')
+#               }else{
+#                 names(ex_list) <- input$new_meta_group
+#               }
+#               showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after completion"), session = getDefaultReactiveDomain())
+#               Sys.sleep(2)
+#               for(i in 1:length(loom_data())){
+#                 loom_data()[[i]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
+#               }
+#               loom.trigger$trigger()
+#               Sys.sleep(2)
+#               removeModal(session = getDefaultReactiveDomain())
+#             }
+#             })
   
   ###==============// FILE CONVERSION TAB //==============####
   
@@ -823,482 +794,484 @@ server <- function(input, output, session){
       showModal(modalDialog(p("The associated Seurat object you selected does not appear to be a Seurat object."), title = "Error"), session = getDefaultReactiveDomain())
     }else if(error == -4){
       showModal(modalDialog(p(paste0("Expecting an object of calss Seurat or loom. Instead recieved an object of class: ", class(obj)[1])), title = "Error"), session = getDefaultReactiveDomain())
+    }else if(error == 1){
+      showNotification('Conversion Complete!', type = 'message', closeButton = FALSE, duration = 15)
     }else{
       showNotification('Error in file conversion!', type = 'error', closeButton = TRUE, duration = 100)
     }
   })
 
-  ####
-  #-- Functions for annotation comparison--#
-  ####
+#   ####
+#   #-- Functions for annotation comparison--#
+#   ####
 
-  ## Make meta data annotations a reactive object instead of performing all of the calles 3 times! 
+#   ## Make meta data annotations a reactive object instead of performing all of the calles 3 times! 
 
-  #-- get the first list of potential annotations from loom--#
-  output$comp_anno_list1 <- renderUI({
-    req(loom_data(), metadata_options())
+#   #-- get the first list of potential annotations from loom--#
+#   output$comp_anno_list1 <- renderUI({
+#     req(loom_data(), metadata_options())
 
-    grouping_options <- metadata_options()
+#     grouping_options <- metadata_options()
     
-    selectInput(
-      inputId = 'comp_anno_1', 
-      label = 'Select the annotation you want to compare!', 
-      choices = sub("_meta_data$","",metadata_options()), 
-      multiple = FALSE)
-    })
+#     selectInput(
+#       inputId = 'comp_anno_1', 
+#       label = 'Select the annotation you want to compare!', 
+#       choices = sub("_meta_data$","",metadata_options()), 
+#       multiple = FALSE)
+#     })
   
-  #-- second list of annotations to compare against--#
-  output$comp_anno_list2 <- renderUI({
-    req(loom_data(), input$comp_anno_1)
+#   #-- second list of annotations to compare against--#
+#   output$comp_anno_list2 <- renderUI({
+#     req(loom_data(), input$comp_anno_1)
 
-    grouping_options <- metadata_options()
+#     grouping_options <- metadata_options()
 
-    grouping_options <- grouping_options[!grepl(paste(input$comp_anno_1,"_meta_data",sep=""),grouping_options)]
+#     grouping_options <- grouping_options[!grepl(paste(input$comp_anno_1,"_meta_data",sep=""),grouping_options)]
     
-    selectInput(
-      inputId = 'comp_anno_2', 
-      label = 'Select the annotation to compare against!', 
-      choices = sub("_meta_data$","",grouping_options), 
-      multiple = FALSE)  })
-  
-
-
-  sankey_comp <- eventReactive(input$compare_annos, {
-    req(input$comp_anno_1, input$comp_anno_2)
-
-    annos_to_compare <- loom_data()[[input$assay_1]]$get.attribute.df(
-      attributes=c(
-        "CellID",
-        paste(input$comp_anno_1,"_meta_data",sep=""),
-        paste(input$comp_anno_2,"_meta_data",sep=""))
-      )
-
-    colnames(annos_to_compare) <- gsub("_meta_data","",colnames(annos_to_compare))
-    
-    annos_to_compare_stats <- annos_to_compare %>% 
-    group_by(get(input$comp_anno_1),get(input$comp_anno_2)) %>%
-    tally() %>%
-    ungroup()
-    
-    colnames(annos_to_compare_stats) <- c("anno1","anno2","n")
-    
-    annos_to_compare_stats <- annos_to_compare_stats %>%
-    mutate("anno1" = paste(anno1,input$comp_anno_1,sep="_")) %>%
-    mutate("anno2" = paste(anno2,input$comp_anno_2,sep="_"))
-    
-    joined_annos <- c(annos_to_compare_stats$anno1,annos_to_compare_stats$anno2)
-    joined_annos <- unique(joined_annos)
-    
-    annos_to_compare_stats$IDsource=match(annos_to_compare_stats$anno1, joined_annos)-1 
-    annos_to_compare_stats$IDtarget=match(annos_to_compare_stats$anno2, joined_annos)-1
-
-    return(annos_to_compare_stats)
-    })
+#     selectInput(
+#       inputId = 'comp_anno_2', 
+#       label = 'Select the annotation to compare against!', 
+#       choices = sub("_meta_data$","",grouping_options), 
+#       multiple = FALSE)  })
   
 
-  #### Compare annotations elements
-  ## Sankey diagram to compare two annotations
-  output$sankey_diagram <- renderPlotly({
-    req(sankey_comp())
+
+#   sankey_comp <- eventReactive(input$compare_annos, {
+#     req(input$comp_anno_1, input$comp_anno_2)
+
+#     annos_to_compare <- loom_data()[[input$assay_1]]$get.attribute.df(
+#       attributes=c(
+#         "CellID",
+#         paste(input$comp_anno_1,"_meta_data",sep=""),
+#         paste(input$comp_anno_2,"_meta_data",sep=""))
+#       )
+
+#     colnames(annos_to_compare) <- gsub("_meta_data","",colnames(annos_to_compare))
     
-    joined_annos <- c(sankey_comp()$anno1,sankey_comp()$anno2)
-    joined_annos <- unique(joined_annos)
+#     annos_to_compare_stats <- annos_to_compare %>% 
+#     group_by(get(input$comp_anno_1),get(input$comp_anno_2)) %>%
+#     tally() %>%
+#     ungroup()
     
-    p <- plot_ly(
-      type = "sankey",
-      orientation = "h",
+#     colnames(annos_to_compare_stats) <- c("anno1","anno2","n")
+    
+#     annos_to_compare_stats <- annos_to_compare_stats %>%
+#     mutate("anno1" = paste(anno1,input$comp_anno_1,sep="_")) %>%
+#     mutate("anno2" = paste(anno2,input$comp_anno_2,sep="_"))
+    
+#     joined_annos <- c(annos_to_compare_stats$anno1,annos_to_compare_stats$anno2)
+#     joined_annos <- unique(joined_annos)
+    
+#     annos_to_compare_stats$IDsource=match(annos_to_compare_stats$anno1, joined_annos)-1 
+#     annos_to_compare_stats$IDtarget=match(annos_to_compare_stats$anno2, joined_annos)-1
+
+#     return(annos_to_compare_stats)
+#     })
+  
+
+#   #### Compare annotations elements
+#   ## Sankey diagram to compare two annotations
+#   output$sankey_diagram <- renderPlotly({
+#     req(sankey_comp())
+    
+#     joined_annos <- c(sankey_comp()$anno1,sankey_comp()$anno2)
+#     joined_annos <- unique(joined_annos)
+    
+#     p <- plot_ly(
+#       type = "sankey",
+#       orientation = "h",
       
-      node = list(
-        label = joined_annos,
-        pad = 15,
-        thickness = 20,
-        line = list(
-          color = "black",
-          width = 0.5
-          )
-        ),
+#       node = list(
+#         label = joined_annos,
+#         pad = 15,
+#         thickness = 20,
+#         line = list(
+#           color = "black",
+#           width = 0.5
+#           )
+#         ),
       
-      link = list(
-        source = sankey_comp()$IDsource,
-        target = sankey_comp()$IDtarget,
-        value =  sankey_comp()$n
-        )
-      )
+#       link = list(
+#         source = sankey_comp()$IDsource,
+#         target = sankey_comp()$IDtarget,
+#         value =  sankey_comp()$n
+#         )
+#       )
 
-    }) # sankey_diagram end
+#     }) # sankey_diagram end
   
-  #### SciBet #### 
+#   #### SciBet #### 
   
-  ## DataTable with SciBet reference information
-  output$scibet_references <- renderReactable({
-    datasets_scibet_sub <- datasets_scibet %>%
-      select(Species,title,GSE,cell_types,number_of_cells,doi_link)
+#   ## DataTable with SciBet reference information
+#   output$scibet_references <- renderReactable({
+#     datasets_scibet_sub <- datasets_scibet %>%
+#       select(Species,title,GSE,cell_types,number_of_cells,doi_link)
     
-    reactable(datasets_scibet_sub,
-              filterable = TRUE,
-              searchable = TRUE,
-              columns = list(
-                Species = colDef(name = "Species", minWidth =50),
-                title = colDef(name = "Title"),
-                GSE = colDef(name = "GSE",  minWidth =50),
-                cell_types = colDef(name = "Cell types", minWidth =200),
-                number_of_cells = colDef(name = "# of cells"),
-                doi_link  = colDef(name = "DOI")
-                )
-              )
-  })
+#     reactable(datasets_scibet_sub,
+#               filterable = TRUE,
+#               searchable = TRUE,
+#               columns = list(
+#                 Species = colDef(name = "Species", minWidth =50),
+#                 title = colDef(name = "Title"),
+#                 GSE = colDef(name = "GSE",  minWidth =50),
+#                 cell_types = colDef(name = "Cell types", minWidth =200),
+#                 number_of_cells = colDef(name = "# of cells"),
+#                 doi_link  = colDef(name = "DOI")
+#                 )
+#               )
+#   })
   
-  ## Controls for SciBet prediction panel
-  show_datasets <- reactive({
-    selected_species <- input$sci_bet_species
-    show_datasets <- subset(datasets_scibet,Species == selected_species)
-    datasets_selected <- show_datasets$internal_id
-    names(datasets_selected) <- show_datasets$title
-    return(names(datasets_selected))
-  })
+#   ## Controls for SciBet prediction panel
+#   show_datasets <- reactive({
+#     selected_species <- input$sci_bet_species
+#     show_datasets <- subset(datasets_scibet,Species == selected_species)
+#     datasets_selected <- show_datasets$internal_id
+#     names(datasets_selected) <- show_datasets$title
+#     return(names(datasets_selected))
+#   })
   
-  ## This output will hold the different datasets for the selected species
-  output$scibet_reference_sets <- renderUI({
-    req(input$sci_bet_species)
-    req(show_datasets())
+#   ## This output will hold the different datasets for the selected species
+#   output$scibet_reference_sets <- renderUI({
+#     req(input$sci_bet_species)
+#     req(show_datasets())
     
-    selectInput(
-      inputId = 'scibet_data', 
-      label = 'Select a dataset!', 
-      choices = show_datasets(), 
-      multiple = FALSE)
-  })
+#     selectInput(
+#       inputId = 'scibet_data', 
+#       label = 'Select a dataset!', 
+#       choices = show_datasets(), 
+#       multiple = FALSE)
+#   })
   
-  output$predict_cells_button <- renderUI({
-    req(loom_data())
-    actionButton("predict_cells", "Predict cell types!")
-  })
+#   output$predict_cells_button <- renderUI({
+#     req(loom_data())
+#     actionButton("predict_cells", "Predict cell types!")
+#   })
   
-  scibet_ref_selected <- reactive({
-    req(input$scibet_data)
+#   scibet_ref_selected <- reactive({
+#     req(input$scibet_data)
     
-    ref_selected <- subset(datasets_scibet,title == input$scibet_data)
+#     ref_selected <- subset(datasets_scibet,title == input$scibet_data)
     
-    return(ref_selected)
-  })
+#     return(ref_selected)
+#   })
   
-  #### Main function running SciBet prediction
-  ## Perform predictions when user clicks button
-  predictions_results <- eventReactive(input$predict_cells ,{
-    ## Run prediction with the dataset selected
-    req(input$assay_1)
-    req(loom_data())
-    req(scibet_ref_selected())
+#   #### Main function running SciBet prediction
+#   ## Perform predictions when user clicks button
+#   predictions_results <- eventReactive(input$predict_cells ,{
+#     ## Run prediction with the dataset selected
+#     req(input$assay_1)
+#     req(loom_data())
+#     req(scibet_ref_selected())
     
-    showModal(modalDialog(p(paste0("Running SciBet prediction on your data...")), 
-                          title = "This window will close once prediction is done! This can take a while depending on the size of your dataset!"), session = getDefaultReactiveDomain())
-    Sys.sleep(2)
+#     showModal(modalDialog(p(paste0("Running SciBet prediction on your data...")), 
+#                           title = "This window will close once prediction is done! This can take a while depending on the size of your dataset!"), session = getDefaultReactiveDomain())
+#     Sys.sleep(2)
     
-    ## Instantiate full prediction table
-    all_predictions <- data.frame()
+#     ## Instantiate full prediction table
+#     all_predictions <- data.frame()
       
-    ## Get scPred model
-    data_dir <- "../SciBet_reference_datasets"
-    file_test_scibet <- paste(data_dir,scibet_ref_selected()$SCAP_filename,sep="/")
-    model <- readr::read_csv(file_test_scibet)
-    if(colnames(model)[1] == "X1" & colnames(model)[2] == "Unnamed: 0"){
-      model <- model[,-1]
-    }
+#     ## Get scPred model
+#     data_dir <- "../SciBet_reference_datasets"
+#     file_test_scibet <- paste(data_dir,scibet_ref_selected()$SCAP_filename,sep="/")
+#     model <- readr::read_csv(file_test_scibet)
+#     if(colnames(model)[1] == "X1" & colnames(model)[2] == "Unnamed: 0"){
+#       model <- model[,-1]
+#     }
     
-    model <- pro.core(model)
-    prd <- LoadModel(model)
+#     model <- pro.core(model)
+#     prd <- LoadModel(model)
     
-    ## Read in data matrix in X chunks and predict each junk, then stitch them
-    ## back together at the end
-    assay <- input$assay_1
+#     ## Read in data matrix in X chunks and predict each junk, then stitch them
+#     ## back together at the end
+#     assay <- input$assay_1
     
-    ## For big datasets, split cell vector into chunks of ~ 2000 cells
-    cell_number <- length(loom_data()[[assay]][["col_attrs/CellID"]][])
-    sub_vector <- 1:cell_number
-    n_chunks <- ceiling(cell_number/2000)
-    chunk_list <- split(sub_vector, sort(sub_vector%%n_chunks))
-    chunk_no <- 1
+#     ## For big datasets, split cell vector into chunks of ~ 2000 cells
+#     cell_number <- length(loom_data()[[assay]][["col_attrs/CellID"]][])
+#     sub_vector <- 1:cell_number
+#     n_chunks <- ceiling(cell_number/2000)
+#     chunk_list <- split(sub_vector, sort(sub_vector%%n_chunks))
+#     chunk_no <- 1
     
-    for(chunk in chunk_list){
-      chunk_no <- chunk_no + 1
-      data_matrix <- loom_data()[[assay]]$matrix[chunk[1]:tail(chunk,n=1),]
-      gene.names <- loom_data()[[assay]][["row_attrs/features"]][]
-      colnames(data_matrix) <- gene.names
+#     for(chunk in chunk_list){
+#       chunk_no <- chunk_no + 1
+#       data_matrix <- loom_data()[[assay]]$matrix[chunk[1]:tail(chunk,n=1),]
+#       gene.names <- loom_data()[[assay]][["row_attrs/features"]][]
+#       colnames(data_matrix) <- gene.names
       
-      ## Do prediction
-      label <- prd(data_matrix)
-      label_df <- data.frame("labels" = label)
-      rm(data_matrix)
+#       ## Do prediction
+#       label <- prd(data_matrix)
+#       label_df <- data.frame("labels" = label)
+#       rm(data_matrix)
       
-      # add prediction to full results
-      all_predictions <- rbind(all_predictions,label_df)
-    }
+#       # add prediction to full results
+#       all_predictions <- rbind(all_predictions,label_df)
+#     }
     
-    Sys.sleep(2)
-    removeModal(session = getDefaultReactiveDomain())
+#     Sys.sleep(2)
+#     removeModal(session = getDefaultReactiveDomain())
     
-    return(all_predictions)
-  })
+#     return(all_predictions)
+#   })
   
-  ## Plot a barplot representing how many cells were assigned to which classes
-  output$scibet_predictions_plot <- renderPlot({
-    req(predictions_results())
+#   ## Plot a barplot representing how many cells were assigned to which classes
+#   output$scibet_predictions_plot <- renderPlot({
+#     req(predictions_results())
 
-    label_summary <- predictions_results() %>%
-      group_by(labels) %>%
-      tally() %>%
-      arrange(desc(n))
+#     label_summary <- predictions_results() %>%
+#       group_by(labels) %>%
+#       tally() %>%
+#       arrange(desc(n))
     
-    label_summary$labels <- factor(label_summary$labels,
-                                   levels = rev(unique(label_summary$labels)))
+#     label_summary$labels <- factor(label_summary$labels,
+#                                    levels = rev(unique(label_summary$labels)))
     
-    scibet_plot <- ggplot(label_summary,aes(labels,n, fill = labels)) +
-      geom_bar(stat = "identity") +
-      theme_cowplot() +
-      theme(legend.position = "none") +
-      coord_flip()
+#     scibet_plot <- ggplot(label_summary,aes(labels,n, fill = labels)) +
+#       geom_bar(stat = "identity") +
+#       theme_cowplot() +
+#       theme(legend.position = "none") +
+#       coord_flip()
     
-    return(scibet_plot)
-  })
+#     return(scibet_plot)
+#   })
   
-  output$add_predictions_button <- renderUI({
-    req(loom_data())
-    req(predictions_results())
-    actionButton("add_predictions_meta", "Add predictions to metadata!")
-    })
+#   output$add_predictions_button <- renderUI({
+#     req(loom_data())
+#     req(predictions_results())
+#     actionButton("add_predictions_meta", "Add predictions to metadata!")
+#     })
 
-  ## Add predictions to metadata
-  observeEvent(input$add_predictions_meta,{
-    req(predictions_results())
-    req(loom_data())
-    req(input$scibet_data)
-    internal_id <- subset(datasets_scibet,title == input$scibet_data)$internal_id
-    pred_params_name <- paste("scibet_",internal_id,"_meta_data",sep="")
-    new_meta_group <- predictions_results()
-    colnames(new_meta_group) <- pred_params_name
+#   ## Add predictions to metadata
+#   observeEvent(input$add_predictions_meta,{
+#     req(predictions_results())
+#     req(loom_data())
+#     req(input$scibet_data)
+#     internal_id <- subset(datasets_scibet,title == input$scibet_data)$internal_id
+#     pred_params_name <- paste("scibet_",internal_id,"_meta_data",sep="")
+#     new_meta_group <- predictions_results()
+#     colnames(new_meta_group) <- pred_params_name
 
-    new_meta_group_list <- as.list(new_meta_group)
+#     new_meta_group_list <- as.list(new_meta_group)
 
-    showModal(modalDialog(p(paste0("Adding predictions to meta data...")), title = "This window will close once task is completed!"), session = getDefaultReactiveDomain())
-    Sys.sleep(2)
-    for(i in 1:length(loom_data())){
-      loom_data()[[i]]$add.col.attribute(attributes = new_meta_group_list, overwrite = TRUE)
-    }
-    loom.trigger$trigger()
-    Sys.sleep(2)
-    removeModal(session = getDefaultReactiveDomain())
-    })
+#     showModal(modalDialog(p(paste0("Adding predictions to meta data...")), title = "This window will close once task is completed!"), session = getDefaultReactiveDomain())
+#     Sys.sleep(2)
+#     for(i in 1:length(loom_data())){
+#       loom_data()[[i]]$add.col.attribute(attributes = new_meta_group_list, overwrite = TRUE)
+#     }
+#     loom.trigger$trigger()
+#     Sys.sleep(2)
+#     removeModal(session = getDefaultReactiveDomain())
+#     })
   
   
-  #### scPred #### 
-  ## Controls for scPred prediction panel
-  # show_datasets <- reactive({
-  #   selected_species <- input$scpred_species
-  #   show_datasets <- subset(datasets_scpred,Species == selected_species)
-  #   datasets_selected <- show_datasets$SCAP_filename
-  #   names(datasets_selected) <- paste(datasets_scpred$Dataset,"."
-  #     ,datasets_scpred$Technology,"."
-  #     ,datasets_scpred$Organ,sep="")
-  #   return(names(datasets_selected))
-  #   })
+#   #### scPred #### 
+#   ## Controls for scPred prediction panel
+#   # show_datasets <- reactive({
+#   #   selected_species <- input$scpred_species
+#   #   show_datasets <- subset(datasets_scpred,Species == selected_species)
+#   #   datasets_selected <- show_datasets$SCAP_filename
+#   #   names(datasets_selected) <- paste(datasets_scpred$Dataset,"."
+#   #     ,datasets_scpred$Technology,"."
+#   #     ,datasets_scpred$Organ,sep="")
+#   #   return(names(datasets_selected))
+#   #   })
   
-  ## This output will hold the different datasets for the selected species
-  # output$scpred_data_list <- renderUI({
-  #   req(input$scpred_species)
-  #   
-  #   selectInput(
-  #     inputId = 'scpred_data', 
-  #     label = 'Select a dataset!', 
-  #     choices = show_datasets(), 
-  #     multiple = FALSE)
-  #   })
+#   ## This output will hold the different datasets for the selected species
+#   # output$scpred_data_list <- renderUI({
+#   #   req(input$scpred_species)
+#   #   
+#   #   selectInput(
+#   #     inputId = 'scpred_data', 
+#   #     label = 'Select a dataset!', 
+#   #     choices = show_datasets(), 
+#   #     multiple = FALSE)
+#   #   })
   
-  ## Button to start prediction
-  # output$predict_cells_button <- renderUI({
-  #   req(loom_data())
-  #   actionButton("predict_cells", "Predict cell types!")
-  #   })
+#   ## Button to start prediction
+#   # output$predict_cells_button <- renderUI({
+#   #   req(loom_data())
+#   #   actionButton("predict_cells", "Predict cell types!")
+#   #   })
   
-  ## Top of the predictions table
-  # output$predictions_table <- renderTable({
-  #   req(predictions_results())
-  #   
-  #   head(predictions_results())
-  #   
-  #   })
+#   ## Top of the predictions table
+#   # output$predictions_table <- renderTable({
+#   #   req(predictions_results())
+#   #   
+#   #   head(predictions_results())
+#   #   
+#   #   })
   
-  # ## Plot a barplot representing how many cells were assigned to which classes
-  # output$predictions_plot <- renderPlot({
-  #   req(predictions_results())
-  #   req(scpred_user_dataset())
-  #   
-  #   predictions_results_tr <- predictions_results() %>%
-  #   group_by(predClass) %>%
-  #   tally() %>%
-  #   mutate("percent" = round((n / sum(n))*100,2))
-  #   
-  #   ggplot(predictions_results_tr,aes(predClass,n,fill = predClass)) +
-  #   geom_bar(stat="identity") +
-  #   theme_cowplot() +
-  #   labs(x = "Predicted cell types",
-  #    y = "Number of cells",
-  #    title = paste("Dataset:", scpred_user_dataset(),sep="")) +
-  #   theme(legend.position = "none") +
-  #   coord_flip() +
-  #   geom_text(aes(label=paste(percent,"%",sep=""),
-  #     fontface=2), position=position_dodge(width=0.9), hjust=-0.2)
-  #   })
-  # 
-  # ## Plot a barplot representing how many cells were assigned to which classes
-  # output$predictions_scores <- renderPlot({
-  #   req(predictions_results())
-  #   req(scpred_user_threshold())
-  #   req(scpred_user_dataset())
-  #   
-  #   predictions <- predictions_results()
-  #   
-  #   max_ct <- colnames(predictions)[apply(predictions,1,which.max)]
-  #   predictions$max_cell_type <- max_ct
-  #   max_ct_summary <- predictions %>%
-  #   group_by(max_cell_type) %>%
-  #   tally() %>%
-  #   arrange(desc(n))
-  #   
-  #   predictions$max_cell_type <- factor(predictions$max_cell_type,levels = max_ct_summary$max_cell_type)
-  #   
-  #   predictions_trans <- predictions %>%
-  #   mutate("cell" = rownames(predictions)) %>%
-  #   gather("predicted_type","score",-predClass,-cell,-max_cell_type) %>%
-  #   group_by(max_cell_type) %>%
-  #   arrange(max_cell_type,desc(score)) %>%
-  #   ungroup()
-  #   
-  #   predictions_trans$cell <- factor(predictions_trans$cell,
-  #    levels = unique(predictions_trans$cell))
-  #   
-  #   ggplot(predictions_trans,aes(cell,score, fill = predicted_type)) +
-  #   geom_bar(stat = "identity",position = "fill",
-  #    width=1) +
-  #   theme_cowplot() +
-  #   theme( axis.text.x=element_blank(),
-  #    axis.ticks.x=element_blank()) +
-  #   labs(x = "cells",
-  #    y = "Cell type probability") +
-  #   geom_hline(yintercept = scpred_user_threshold(), linetype = 2)
-  #   
-  #   })
-  # 
-  # filename_scpred <- reactive({
-  #   req(input$scpred_data)
-  #   
-  #   dataset_split <- strsplit(as.character(input$scpred_data),split="\\.")
-  #   species_sel <- input$scpred_species
-  #   dataset_sel <- dataset_split[[1]][1]
-  #   technology_sel <- dataset_split[[1]][2]
-  #   organ_sel <- dataset_split[[1]][3]
-  #   file <- subset(datasets_scpred,Species == species_sel &
-  #    Dataset == dataset_sel &
-  #    Technology == technology_sel &
-  #    Organ == organ_sel)
-  #   
-  #   return(file$SCAP_filename)
-  #   })
-  # 
-  # ## Perform predictions when user clicks button
-  # predictions_results <- eventReactive(input$predict_cells ,{
-  #   ## Run prediction with the dataset selected
-  #   req(input$assay_1)
-  #   req(loom_data())
-  #   req(filename_scpred())
-  #   
-  #   showModal(modalDialog(p(paste0("Running scPred prediction on your data...")), 
-  #     title = "This window will close once prediction is done! This can take a while depending on the size of your dataset!"), session = getDefaultReactiveDomain())
-  #   Sys.sleep(2)
-  #   
-  #   ## Instantiate full prediction table
-  #   all_predictions <- data.frame()
-  #   
-  #   ## Get scPred model
-  #   data_dir <- "/scpred_references"
-  #   file_test_scpred <- paste(data_dir,filename_scpred(),sep="/")
-  #   scp <- readRDS(file_test_scpred)
-  #   
-  #   ## Read in data matrix in X chunks and predict each junk, then stitch them
-  #   ## back together at the end
-  #   assay <- input$assay_1
-  #   
-  #   ## For big datasets, split cell vector into chunks of ~ 2000 cells
-  #   cell_number <- length(loom_data()[[assay]][["col_attrs/CellID"]][])
-  #   sub_vector <- 1:cell_number
-  #   n_chunks <- ceiling(cell_number/2000)
-  #   chunk_list <- split(sub_vector, sort(sub_vector%%n_chunks))
-  #   chunk_no <- 1
-  #   
-  #   for(chunk in chunk_list){
-  #     chunk_no <- chunk_no + 1
-  #     data_matrix <- as(t(loom_data()[[assay]]$matrix[chunk[1]:tail(chunk,n=1),]),"dgCMatrix")
-  #     gene.names <- loom_data()[[assay]][["row_attrs/features"]][]
-  #     rownames(data_matrix) <- gene.names
-  #     
-  #     ## Do prediction
-  #     scp <- scPredict(scp, newData = data_matrix, threshold = scpred_user_threshold())
-  #     # Return prediction results
-  #     predictions <- getPredictions(scp)
-  #     rm(data_matrix)
-  #     
-  #     # add prediction to full results
-  #     all_predictions <- rbind(all_predictions,predictions)
-  #   }
-  # 
-  #   ## Free up ram
-  #   rm(scp)
-  #   
-  #   Sys.sleep(2)
-  #   removeModal(session = getDefaultReactiveDomain())
-  #   
-  #   return(all_predictions)
-  #   })
-  # 
-  # ## Send threshold to plot functions
-  # scpred_user_threshold <- eventReactive(input$predict_cells ,{
-  #   req(input$pred_threshold)
-  #   return(input$pred_threshold)
-  #   })
-  # 
-  # ## Send dataset to plot functions
-  # scpred_user_dataset <- eventReactive(input$predict_cells ,{
-  #   req(input$scpred_data)
-  #   return(input$scpred_data)
-  #   })
-  # 
-  # output$add_predictions_button <- renderUI({
-  #   req(loom_data())
-  #   req(predictions_results())
-  #   actionButton("add_predictions_meta", "Add predictions to metadata!")
-  #   })
-  # 
-  # ## Add predictions to metadata
-  # observeEvent(input$add_predictions_meta,{
-  #   req(predictions_results())
-  #   req(loom_data())
-  # 
-  #   new_meta_group <- predictions_results() %>%
-  #   select(predClass)
-  #   
-  #   dataset <- gsub(" " ,"_",scpred_user_dataset())
-  #   pred_params_name <- paste("scpred_",dataset,"_",scpred_user_threshold(),"_meta_data",sep="")
-  #   colnames(new_meta_group) <- c(pred_params_name)
-  #   
-  #   new_meta_group_list <- as.list(new_meta_group) 
-  # 
-  #   showModal(modalDialog(p(paste0("Adding predictions to meta data...")), title = "This window will close once task is completed!"), session = getDefaultReactiveDomain())
-  #   Sys.sleep(2)
-  #   for(i in 1:length(loom_data())){
-  #     loom_data()[[i]]$add.col.attribute(attributes = new_meta_group_list, overwrite = TRUE)
-  #   }
-  #   loom.trigger$trigger()
-  #   Sys.sleep(2)
-  #   removeModal(session = getDefaultReactiveDomain())
-  #   })
+#   # ## Plot a barplot representing how many cells were assigned to which classes
+#   # output$predictions_plot <- renderPlot({
+#   #   req(predictions_results())
+#   #   req(scpred_user_dataset())
+#   #   
+#   #   predictions_results_tr <- predictions_results() %>%
+#   #   group_by(predClass) %>%
+#   #   tally() %>%
+#   #   mutate("percent" = round((n / sum(n))*100,2))
+#   #   
+#   #   ggplot(predictions_results_tr,aes(predClass,n,fill = predClass)) +
+#   #   geom_bar(stat="identity") +
+#   #   theme_cowplot() +
+#   #   labs(x = "Predicted cell types",
+#   #    y = "Number of cells",
+#   #    title = paste("Dataset:", scpred_user_dataset(),sep="")) +
+#   #   theme(legend.position = "none") +
+#   #   coord_flip() +
+#   #   geom_text(aes(label=paste(percent,"%",sep=""),
+#   #     fontface=2), position=position_dodge(width=0.9), hjust=-0.2)
+#   #   })
+#   # 
+#   # ## Plot a barplot representing how many cells were assigned to which classes
+#   # output$predictions_scores <- renderPlot({
+#   #   req(predictions_results())
+#   #   req(scpred_user_threshold())
+#   #   req(scpred_user_dataset())
+#   #   
+#   #   predictions <- predictions_results()
+#   #   
+#   #   max_ct <- colnames(predictions)[apply(predictions,1,which.max)]
+#   #   predictions$max_cell_type <- max_ct
+#   #   max_ct_summary <- predictions %>%
+#   #   group_by(max_cell_type) %>%
+#   #   tally() %>%
+#   #   arrange(desc(n))
+#   #   
+#   #   predictions$max_cell_type <- factor(predictions$max_cell_type,levels = max_ct_summary$max_cell_type)
+#   #   
+#   #   predictions_trans <- predictions %>%
+#   #   mutate("cell" = rownames(predictions)) %>%
+#   #   gather("predicted_type","score",-predClass,-cell,-max_cell_type) %>%
+#   #   group_by(max_cell_type) %>%
+#   #   arrange(max_cell_type,desc(score)) %>%
+#   #   ungroup()
+#   #   
+#   #   predictions_trans$cell <- factor(predictions_trans$cell,
+#   #    levels = unique(predictions_trans$cell))
+#   #   
+#   #   ggplot(predictions_trans,aes(cell,score, fill = predicted_type)) +
+#   #   geom_bar(stat = "identity",position = "fill",
+#   #    width=1) +
+#   #   theme_cowplot() +
+#   #   theme( axis.text.x=element_blank(),
+#   #    axis.ticks.x=element_blank()) +
+#   #   labs(x = "cells",
+#   #    y = "Cell type probability") +
+#   #   geom_hline(yintercept = scpred_user_threshold(), linetype = 2)
+#   #   
+#   #   })
+#   # 
+#   # filename_scpred <- reactive({
+#   #   req(input$scpred_data)
+#   #   
+#   #   dataset_split <- strsplit(as.character(input$scpred_data),split="\\.")
+#   #   species_sel <- input$scpred_species
+#   #   dataset_sel <- dataset_split[[1]][1]
+#   #   technology_sel <- dataset_split[[1]][2]
+#   #   organ_sel <- dataset_split[[1]][3]
+#   #   file <- subset(datasets_scpred,Species == species_sel &
+#   #    Dataset == dataset_sel &
+#   #    Technology == technology_sel &
+#   #    Organ == organ_sel)
+#   #   
+#   #   return(file$SCAP_filename)
+#   #   })
+#   # 
+#   # ## Perform predictions when user clicks button
+#   # predictions_results <- eventReactive(input$predict_cells ,{
+#   #   ## Run prediction with the dataset selected
+#   #   req(input$assay_1)
+#   #   req(loom_data())
+#   #   req(filename_scpred())
+#   #   
+#   #   showModal(modalDialog(p(paste0("Running scPred prediction on your data...")), 
+#   #     title = "This window will close once prediction is done! This can take a while depending on the size of your dataset!"), session = getDefaultReactiveDomain())
+#   #   Sys.sleep(2)
+#   #   
+#   #   ## Instantiate full prediction table
+#   #   all_predictions <- data.frame()
+#   #   
+#   #   ## Get scPred model
+#   #   data_dir <- "/scpred_references"
+#   #   file_test_scpred <- paste(data_dir,filename_scpred(),sep="/")
+#   #   scp <- readRDS(file_test_scpred)
+#   #   
+#   #   ## Read in data matrix in X chunks and predict each junk, then stitch them
+#   #   ## back together at the end
+#   #   assay <- input$assay_1
+#   #   
+#   #   ## For big datasets, split cell vector into chunks of ~ 2000 cells
+#   #   cell_number <- length(loom_data()[[assay]][["col_attrs/CellID"]][])
+#   #   sub_vector <- 1:cell_number
+#   #   n_chunks <- ceiling(cell_number/2000)
+#   #   chunk_list <- split(sub_vector, sort(sub_vector%%n_chunks))
+#   #   chunk_no <- 1
+#   #   
+#   #   for(chunk in chunk_list){
+#   #     chunk_no <- chunk_no + 1
+#   #     data_matrix <- as(t(loom_data()[[assay]]$matrix[chunk[1]:tail(chunk,n=1),]),"dgCMatrix")
+#   #     gene.names <- loom_data()[[assay]][["row_attrs/features"]][]
+#   #     rownames(data_matrix) <- gene.names
+#   #     
+#   #     ## Do prediction
+#   #     scp <- scPredict(scp, newData = data_matrix, threshold = scpred_user_threshold())
+#   #     # Return prediction results
+#   #     predictions <- getPredictions(scp)
+#   #     rm(data_matrix)
+#   #     
+#   #     # add prediction to full results
+#   #     all_predictions <- rbind(all_predictions,predictions)
+#   #   }
+#   # 
+#   #   ## Free up ram
+#   #   rm(scp)
+#   #   
+#   #   Sys.sleep(2)
+#   #   removeModal(session = getDefaultReactiveDomain())
+#   #   
+#   #   return(all_predictions)
+#   #   })
+#   # 
+#   # ## Send threshold to plot functions
+#   # scpred_user_threshold <- eventReactive(input$predict_cells ,{
+#   #   req(input$pred_threshold)
+#   #   return(input$pred_threshold)
+#   #   })
+#   # 
+#   # ## Send dataset to plot functions
+#   # scpred_user_dataset <- eventReactive(input$predict_cells ,{
+#   #   req(input$scpred_data)
+#   #   return(input$scpred_data)
+#   #   })
+#   # 
+#   # output$add_predictions_button <- renderUI({
+#   #   req(loom_data())
+#   #   req(predictions_results())
+#   #   actionButton("add_predictions_meta", "Add predictions to metadata!")
+#   #   })
+#   # 
+#   # ## Add predictions to metadata
+#   # observeEvent(input$add_predictions_meta,{
+#   #   req(predictions_results())
+#   #   req(loom_data())
+#   # 
+#   #   new_meta_group <- predictions_results() %>%
+#   #   select(predClass)
+#   #   
+#   #   dataset <- gsub(" " ,"_",scpred_user_dataset())
+#   #   pred_params_name <- paste("scpred_",dataset,"_",scpred_user_threshold(),"_meta_data",sep="")
+#   #   colnames(new_meta_group) <- c(pred_params_name)
+#   #   
+#   #   new_meta_group_list <- as.list(new_meta_group) 
+#   # 
+#   #   showModal(modalDialog(p(paste0("Adding predictions to meta data...")), title = "This window will close once task is completed!"), session = getDefaultReactiveDomain())
+#   #   Sys.sleep(2)
+#   #   for(i in 1:length(loom_data())){
+#   #     loom_data()[[i]]$add.col.attribute(attributes = new_meta_group_list, overwrite = TRUE)
+#   #   }
+#   #   loom.trigger$trigger()
+#   #   Sys.sleep(2)
+#   #   removeModal(session = getDefaultReactiveDomain())
+#   #   })
   
 } # server end

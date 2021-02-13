@@ -66,7 +66,7 @@ ui <- navbarPage(
                 style = 'width: 50%; text-align: left;',
                 div(
                   class = 'from-group shiny-input-container',
-                  shinyDirButton("directory", "Select Dataset", "Please select a Dataset")
+                  shinyFilesButton("h5ad_in", "Select an H5ad Dataset", "Please select an H5ad Dataset", multiple = FALSE)
                   )
                 )
               )
@@ -99,29 +99,40 @@ ui <- navbarPage(
         width = 6,
         wellPanel(
           style  = 'background:white;',
-          plotlyOutput('dimplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-          uiOutput('reduction_1', style = 'padding: 10px')
+          fluidRow(
+            plotlyOutput('dimplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px')
+          ),
+          fluidRow(
+            uiOutput('reduction_1', style = 'padding: 10px')
           )
-        ),
+        )
+      ),
       column(
         width = 6,
         wellPanel(
           style  = 'background:white;',
-          conditionalPanel(condition = "input.nebulosa_on == 'no'", 
-                           plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-                           uiOutput('featureplot_1_feature.select', style = 'padding: 10px'),
-          ),
+          fluidRow(
+            conditionalPanel(condition = "input.nebulosa_on == 'no'", 
+                             plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
+            ),
 
-          conditionalPanel(condition = "input.nebulosa_on == 'yes'", 
-                           plotOutput('featureplot_1_nebulosa', height = '120%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-                           uiOutput('featureplot_1_features_nebulosa.select', style = 'padding: 10px')
+            conditionalPanel(condition = "input.nebulosa_on == 'yes'", 
+                             plotOutput('featureplot_1_nebulosa', height = '120%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
+            )
           ),
-
-          uiOutput('featureplot_1_nebulosa_on', style = 'padding: 10px')
+          fluidRow(
+            column(width = 3,
+              br(),
+              radioButtons('nebulosa_on', label = 'Nebulosa plot', choices = c('yes', 'no'), selected = 'no', inline = TRUE)
+            ),
+            column(width = 9,
+              uiOutput('featureplot_1_feature.select', style = 'padding: 10px')
+            )
           )
-        ),
-      div(style = "height:10px;")
+        )
       ),
+      div(style = "height:10px;")
+    ),
     fluidRow(
       column(
         align = 'center',
