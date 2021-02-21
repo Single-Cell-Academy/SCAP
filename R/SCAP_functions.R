@@ -585,21 +585,7 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   colnames(plot.data) <- c(colnames(reduc.in), names(group.by)[1])
   rownames(plot.data) <- names(group.by[[1]])
 
-
-  # # Set fixed limits so plot doesn't resize when subsetting in plotly. 
-  # # Enlarge limits a bit so cells don't fall on the axis lines
-  # xrange <- as.numeric(max(plot.data[,1])) - as.numeric(min(plot.data[,1]))
-  # yrange <- as.numeric(max(plot.data[,2])) - as.numeric(min(plot.data[,2]))
-  
-  # xlimits <- c((as.numeric(min(plot.data[,1])) - xrange * 0.15),
-  #              (as.numeric(max(plot.data[,1])) + xrange * 0.15))
-  # ylimits <- c((as.numeric(min(plot.data[,2])) - yrange * 0.15),
-  #              (as.numeric(max(plot.data[,2])) + yrange * 0.15))
-  # if(n>2){
-  #   zrange <- as.numeric(max(plot.data[,3])) - as.numeric(min(plot.data[,3]))
-  #   zlimits <- c((as.numeric(min(plot.data[,3])) - zrange * 0.15),
-  #              (as.numeric(max(plot.data[,3])) + zrange * 0.15))
-  # }
+  cat(file = stderr(), paste(head(rownames(plot.data))))
 
   ax.x <- list(
     title = colnames(reduc.in)[1],
@@ -683,16 +669,8 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
   group.by[[1]] <- reorder_levels(group.by[[1]])
 
   plot.data <- do.call(cbind, list(reduc.in, group.by, feature.in))
-  
-  # xrange <- as.numeric(max(plot.data[,1])) - as.numeric(min(plot.data[,1]))
-  # yrange <- as.numeric(max(plot.data[,2])) - as.numeric(min(plot.data[,2]))
-  # zrange <- as.numeric(max(plot.data[,3])) - as.numeric(min(plot.data[,3]))
-  # xlimits <- c((as.numeric(min(plot.data[,1])) - xrange * 0.15),
-  #              (as.numeric(max(plot.data[,1])) + xrange * 0.15))
-  # ylimits <- c((as.numeric(min(plot.data[,2])) - yrange * 0.15),
-  #              (as.numeric(max(plot.data[,2])) + yrange * 0.15))
-  # zlimits <- c((as.numeric(min(plot.data[,3])) - zrange * 0.15),
-  #              (as.numeric(max(plot.data[,3])) + zrange * 0.15))
+  rownames(plot.data) <- names(group.by[[1]])
+
   ax.x <- list(
     title = colnames(reduc.in)[1],
     zeroline = FALSE,
@@ -763,7 +741,7 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
 
 #### 
 ## Nebulosa version
-featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, feature.in, low.res, data){
+featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, feature.in, low.res){
   if(ncol(feature.in) < 1) return(NULL)
   data.features = as.matrix(t(feature.in))
   data_seurat <- CreateSeuratObject(counts = data.features,

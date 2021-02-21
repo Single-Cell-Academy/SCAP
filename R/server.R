@@ -33,15 +33,17 @@ reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 datasets_scibet <- fread("../meta/SciBet_reference_list.tsv")
 ## Source functions
 source("SCAP_functions.R")
+source_python("../Python/rank_genes_groups_df.py")
 
 anndata <- import('anndata')
+scanpy <- import('scanpy')
 
 server <- function(input, output, session){
   session$onSessionEnded(stopApp)
   
   options(shiny.maxRequestSize=500*1024^2)
 
-  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, reductions = NULL)
+  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL)
 
   ## Determine folders for ShinyDir button
   volumes <- c("FTP" = "/ftp", Home = fs::path_home())
@@ -60,8 +62,7 @@ server <- function(input, output, session){
   shinyFileChoose(input, "h5ad_in", roots = volumes, session = session)
   
   # connect to .h5ad files in chosen dir
-  h5ad_data <- reactive({
-    req(input$h5ad_in)
+  observeEvent(input$h5ad_in, {
     path <- parseFilePaths(selection = input$h5ad_in, roots = volumes)$datapath
     if(is.integer(path[1]) || identical(path, character(0)) || identical(path, character(0))) return(NULL)
     h5ad_files <- path#paste0(path,"/",list.files(path))
@@ -93,8 +94,8 @@ server <- function(input, output, session){
     }
     names(reductions) <- reduction_keys
     rvalues$reductions <- reductions
-    cat(file = stderr(), paste(str(rvalues)))
-    return(data)
+    rvalues$cell_ids <- rownames(data[[1]]$obs)
+    rvalues$h5ad <- data
   })
   
   ## Florian: What is this variable doing here? Why is it not reactive?
@@ -118,12 +119,12 @@ server <- function(input, output, session){
   
   #-- select input for Assay --#
   output$assay_1 <- renderUI({
-    req(h5ad_data())
+    req(rvalues$h5ad)
     selectInput('assay_1', "Select Assay", 
-      choices = names(h5ad_data()), 
-      selected = ifelse(any(names(h5ad_data())=="RNA"),
+      choices = names(rvalues$h5ad), 
+      selected = ifelse(any(names(rvalues$h5ad)=="RNA"),
         yes = "RNA",
-        no = names(h5ad_data())[1]))
+        no = names(rvalues$h5ad)[1]))
   })
 
   #-- Display name of data --#
@@ -141,7 +142,7 @@ server <- function(input, output, session){
     req(input$assay_1, rvalues$obs)
     assay <- input$assay_1
     if(any(grepl("seurat_clusters", rvalues$obs, ignore.case = FALSE))){
-      sel <- "seurat_clusters"
+      sel <- rvalues$obs[grep("seurat_clusters", rvalues$obs)]
     }else if(any(grepl(paste0(tolower(assay),"_clusters"), rvalues$obs, ignore.case = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
     }else{
@@ -166,10 +167,10 @@ server <- function(input, output, session){
   })
   
   #-- select the features for the feature plot --#
-  output$featureplot_1_feature.select <- renderUI({
+  output$featureplot_1_feature_select <- renderUI({
     req(input$assay_1)
     assay <- input$assay_1
-    selectInput(inputId = 'featureplot_1_feature.select', 
+    selectInput(inputId = 'featureplot_1_feature_select', 
                 label = 'Select a Feature to Visualize on the Feature Plot', 
                 choices = rvalues$features, 
                 selected = rvalues$features[1], 
@@ -198,7 +199,7 @@ server <- function(input, output, session){
   output$split_by <- renderUI({
     req(input$assay_1, rvalues$obs)
     choices <- unlist(lapply(rvalues$obs, function(x){
-      if(length(unique(h5ad_data()[[1]]$obs[x][,,drop=TRUE]))>1){
+      if(length(unique(rvalues$h5ad[[1]]$obs[x][,,drop=TRUE]))>1){
         return(x)
       }
     }))
@@ -212,9 +213,9 @@ server <- function(input, output, session){
   #-- dimensional reduction plot coloured by cell groups --#
   output$dimplot_1 <- renderPlotly({
     req(input$grouping_1, input$reduction_1)
-    group.by <- list(h5ad_data()[[1]]$obs[input$grouping_1][,,drop=TRUE])
+    group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     names(group.by) <- input$grouping_1
-    names(group.by[[1]]) <- rownames(rvalues$reductions)
+    names(group.by[[1]]) <- rvalues$cell_ids
     dimPlotlyOutput(assay.in = input$assay_1, 
                     reduc.in = rvalues$reductions[[input$reduction_1]], 
                     group.by = group.by, 
@@ -224,31 +225,26 @@ server <- function(input, output, session){
   
   #-- dimensional reduction plot coloured by feature expression --#
   output$featureplot_1 <- renderPlotly({
-    req(input$grouping_1, input$reduction_1, input$featureplot_1_feature.select)
-    group.by <- list(h5ad_data()[[1]]$obs[input$grouping_1][,,drop=TRUE])
+    req(input$grouping_1, input$reduction_1, input$featureplot_1_feature_select)
+    group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     names(group.by) <- input$grouping_1
-    names(group.by[[1]]) <- rownames(rvalues$reductions)
-    feature.in <- as.data.frame(h5ad_data()[[1]]$X[,match(input$featureplot_1_feature.select, rvalues$features)])
-    colnames(feature.in) <- input$featureplot_1_feature.select
-    featurePlotlyOutput(assay.in = input$assay_1,
-                        reduc.in = rvalues$reductions[[input$reduction_1]],
-                        group.by = group.by,
-                        feature.in = feature.in,
-                        low.res = 'yes')
-    })
-  
-  #-- dimensional reduction plot coloured by feature expression --#
-  output$featureplot_1_nebulosa <- renderPlot({
-    req(input$grouping_1, input$featureplot_1_feature.select)
-    group.by <- h5ad_data()[[1]]$obs[input$grouping_1][,,drop=FALSE]
-    feature.in <- as.data.frame(h5ad_data()[[1]]$X[,match(input$featureplot_1_feature.select, rvalues$features)])
-    colnames(feature.in) <- input$featureplot_1_feature.select
+    names(group.by[[1]]) <- rvalues$cell_ids
+    feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_1_feature_select, rvalues$features)])
+    colnames(feature.in) <- input$featureplot_1_feature_select
     rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
-    featurePlotlyOutput_nebulosa(assay.in = input$assay_1,
-                                  reduc.in = rvalues$reductions[[input$reduction_1]],
-                                  group.by = group.by,
-                                  feature.in = feature.in,
-                                  low.res = 'yes')
+    if(input$nebulosa_on == 'no'){
+      featurePlotlyOutput(assay.in = input$assay_1,
+                          reduc.in = rvalues$reductions[[input$reduction_1]],
+                          group.by = group.by,
+                          feature.in = feature.in,
+                          low.res = 'yes')
+    }else{
+      featurePlotlyOutput_nebulosa(assay.in = input$assay_1,
+                                reduc.in = rvalues$reductions[[input$reduction_1]],
+                                group.by = as.data.frame(group.by),
+                                feature.in = feature.in,
+                                low.res = 'yes')
+    }
   })
   
   #-- dot plot for selected feature expression --#
@@ -277,13 +273,13 @@ server <- function(input, output, session){
     ticks='outside'
     )
     
-    data.features <- as.data.frame(h5ad_data()[[1]]$X[,match(input$dotplot_1_feature_select, rvalues$features)])
+    data.features <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$dotplot_1_feature_select, rvalues$features)])
     colnames(data.features) <- input$dotplot_1_feature_select
     rownames(data.features) <- rownames(rvalues$reductions)
-    data.features$id <- h5ad_data()[[1]]$obs[input$grouping_1][,,drop=TRUE]
+    data.features$id <- rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE]
 
     if(input$do_split == 'yes' & !is.null(input$split_by)){
-      splits = list(h5ad_data()[[1]]$obs[input$split_by][,,drop=TRUE])
+      splits = list(rvalues$h5ad[[1]]$obs[input$split_by][,,drop=TRUE])
       names(splits) <- input$split_by
       p <- split_dot_plot(data.features = data.features, features = input$dotplot_1_feature_select, assay = assay, split.by = splits)
       if(is.null(p)) return(NULL)
@@ -318,142 +314,158 @@ server <- function(input, output, session){
   })
   
   
-#   ###==============// ANNOTATION TAB //==============####
+  ###==============// ANNOTATION TAB //==============####
   
-#   #-- select input for Assay --#
-#   output$assay_2 <- renderUI({
-#     req(loom_data())
-#     selectInput('assay_2', "Select Assay", choices = names(loom_data()), selected = ifelse(any(names(loom_data())=="RNA"),yes = "RNA",no = names(loom_data())[1]))
-#     })
+  #-- select input for Assay --#
+  output$assay_2 <- renderUI({
+    req(rvalues$h5ad)
+    selectInput('assay_2', "Select Assay", 
+      choices = names(rvalues$h5ad), 
+      selected = ifelse(any(names(rvalues$h5ad)=="RNA"),
+        yes = "RNA",
+        no = names(rvalues$h5ad)[1]))
+  })
   
-#   to_listen <- reactive({
-#     list(input$assay_2, loom_data())
-#     })
-#   #-- initialize/reset tmp_annotations --#
-#   observeEvent(to_listen(),{
-#     req(input$assay_2, loom_data())
-#     rvalues$tmp_annotations <- rep("unlabled", loom_data()[[input$assay_2]]$shape[2])
-#     names(rvalues$tmp_annotations) <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
-#     })
+  to_listen <- reactive({
+    list(input$assay_2, rvalues$h5ad)
+  })
+
+  #-- initialize/reset tmp_annotations --#
+  observeEvent(to_listen(),{
+    req(input$assay_2, rvalues$h5ad)
+    rvalues$tmp_annotations <- rep("unlabled", rvalues$h5ad[[1]]$n_obs)
+    names(rvalues$tmp_annotations) <- rownames(rvalues$h5ad[[1]]$obs)
+  })
   
-#   #-- select how to group cells --#
-#   output$grouping_2 <- renderUI({
-#     req(input$assay_2, metadata_options())
-#     grouping_options <- metadata_options()
-#     assay <- input$assay_2
-#     if(any(grepl("seurat_clusters", sub("_meta_data","",grouping_options), ignore.case = FALSE))){
-#       sel <- "seurat_clusters"
-#       }else if(any(grepl(paste0(tolower(assay),"_clusters"),sub("_meta_data","",grouping_options), fixed = TRUE))){
-#         sel <- paste0(tolower(assay),"_clusters")
-#         }else{
-#           sel <- sub("_meta_data","",grouping_options[1])
-#         }
-#         selectInput(inputId = 'grouping_2', label = 'Group By', choices = sub("_meta_data$","",metadata_options()), selected = sel, multiple = FALSE)
-#         })
+  #-- select how to group cells --#
+  output$grouping_2 <- renderUI({
+    req(input$assay_2, rvalues$obs)
+    assay <- input$assay_2
+    if(any(grepl("seurat_clusters", rvalues$obs, ignore.case = FALSE))){
+      sel <- rvalues$obs[grep("seurat_clusters", rvalues$obs)]
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"), rvalues$obs, ignore.case = TRUE))){
+      sel <- paste0(tolower(assay),"_clusters")
+    }else{
+      sel <- rvalues$obs[1]
+    }
+    selectInput(inputId = 'grouping_2', label = 'Group By', choices = rvalues$obs, selected = sel, multiple = FALSE)
+  })
   
-#   #-- select the clustering method --#
-#   output$reduction_2 <- renderUI({
-#     req(input$assay_2)
-#     assay <- input$assay_2
-#     options <- names(loom_data()[[assay]]$col.attrs)[grep("_2d",names(loom_data()[[assay]]$col.attrs))]
-#     l.assay <- tolower(assay)
-#     reductions <- unique(sub("_._reduction$","",options[which(grepl('_reduction$',options))]))
-#     sel <- if(any(grepl("umap_.*_2d", reductions))){
-#       reductions[grep("umap_.*_2d", reductions)][1]
-#       }else if(any(grepl("tsne_.*_2d", reductions))){
-#         reductions[grep("tsne_.*_2d", reductions)][1]
-#         }else if(any(grepl("pca_.*_2d", reductions))){
-#           reductions[grep("pca_.*_2d", reductions)][1]
-#           }else{
-#             reductions[1]
-#           }
-#           selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(reductions), selected = sel)
-#           })
+  #-- select the clustering method --#
+  output$reduction_2 <- renderUI({
+    req(input$assay_2)
+    assay <- input$assay_2
+    options <- names(rvalues$reductions)
+    sel <- if(any(grepl("umap", options, ignore.case = TRUE))){
+      options[grepl("umap", options, ignore.case = TRUE)][1]
+    }else if(any(grepl("tsne", options, ignore.case = TRUE))){
+      options[grepl("tsne", options, ignore.case = TRUE)][1]
+    }else{
+      options[1]
+    }
+    selectInput(inputId = 'reduction_2', 'Choose Clustering Method', choices = as.list(options), selected = sel)
+  })
   
-#   #-- select the featutres for the feature plot --#
-#   output$featureplot_2_feature_select<- renderUI({
-#     req(input$assay_2)
-#     assay <- input$assay_2
-#     choices <- loom_data()[[assay]][['row_attrs/features']][]
-#     selectInput(inputId = 'featureplot_2_feature_select', label = 'Select a Feature to Visualize on the Feature Plot', choices = choices, selected = choices[1], multiple = FALSE)
-#     })
+  #-- select the features for the feature plot --#
+  output$featureplot_2_feature_select <- renderUI({
+    req(input$assay_2)
+    assay <- input$assay_2
+    selectInput(inputId = 'featureplot_2_feature_select', 
+                label = 'Select a Feature to Visualize on the Feature Plot', 
+                choices = rvalues$features, 
+                selected = rvalues$features[1], 
+                multiple = ifelse(input$nebulosa_on == "yes", TRUE, FALSE))
+  })
   
-#   #-- display cells that were selected in a table --#
-#   output$selected_cells <- renderTable({
-#     req(input$assay_2)
-#     selected_cells <- as.data.frame(event_data("plotly_selected")$key, stringsAsFactors = FALSE)
-#     if (is.null(selected_cells) | ncol(selected_cells) == 0 | nrow(selected_cells) == 0){
-#       rvalues$cells <- NULL
-#       return("Click and drag on either plot to select cells for marker identification (i.e., select/lasso) (double-click on either plot to clear selection)")
-#       }else if(ncol(selected_cells)>1){
-#         selected_cells <- as.data.frame(as.character(selected_cells[1,]),stringsAsFactors = F)
-#       }
-#       colnames(selected_cells) <- ""
-#       rvalues$cells <- selected_cells
-#       selected_cells
-#       })
+  #-- display cells that were selected in a table --#
+  output$selected_cells <- renderTable({
+    req(input$assay_2)
+    selected_cells <- as.data.frame(event_data("plotly_selected")$key, stringsAsFactors = FALSE)
+    if (is.null(selected_cells) | ncol(selected_cells) == 0 | nrow(selected_cells) == 0){
+      rvalues$cells <- NULL
+      return("Click and drag on either plot to select cells for marker identification (i.e., select/lasso) (double-click on either plot to clear selection)")
+    }else if(ncol(selected_cells)>1){
+      selected_cells <- as.data.frame(as.character(selected_cells[1,]),stringsAsFactors = F)
+    }
+    colnames(selected_cells) <- ""
+    rvalues$cells <- selected_cells
+    selected_cells
+  })
   
-#   #-- dimensional reduction plot coloured by cell groups --#
-#   output$dimplot_2 <- renderPlotly({
-#     req(input$assay_2, metadata_options())
-#     dimPlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, annot_panel = input$annot_panel, tmp_annotations = rvalues$tmp_annotations, low.res = 'yes', data = loom_data())
-#     })
+  #-- dimensional reduction plot coloured by cell groups --#
+  output$dimplot_2 <- renderPlotly({
+    req(input$grouping_2, input$reduction_2)
+    group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop=TRUE])
+    names(group.by) <- input$grouping_2
+    names(group.by[[1]]) <- rvalues$cell_ids
+    dimPlotlyOutput(assay.in = input$assay_2, 
+                    reduc.in = rvalues$reductions[[input$reduction_2]], 
+                    group.by = group.by, 
+                    annot_panel = input$annot_panel, 
+                    tmp_annotations = rvalues$tmp_annotations, 
+                    low.res = 'yes')
+  })
   
-#   #-- dimensional reduction plot coloured by feature expression --#
-#   output$featureplot_2 <- renderPlotly({
-#     req(input$featureplot_2_feature_select)
-#     featurePlotlyOutput(assay.in = input$assay_2, reduc.in = input$reduction_2, group.by = input$grouping_2, feature.in = input$featureplot_2_feature_select, low.res = 'yes', data = loom_data())
-#     })
+  #-- dimensional reduction plot coloured by feature expression --#
+  output$featureplot_2 <- renderPlotly({
+    req(input$grouping_2, input$reduction_2, input$featureplot_2_feature_select)
+    group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop=TRUE])
+    names(group.by) <- input$grouping_2
+    names(group.by[[1]]) <- rvalues$cell_ids
+    feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_2_feature_select, rvalues$features)])
+    colnames(feature.in) <- input$featureplot_2_feature_select
+    rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_2]])
+    featurePlotlyOutput(assay.in = input$assay_2, 
+                        reduc.in = rvalues$reductions[[input$reduction_2]], 
+                        group.by = group.by, 
+                        feature.in = feature.in, 
+                        low.res = 'yes')
+  })
   
-#   #-- Find the markers for the 1) selected cells compared to all other cells or
-#   #-- 2) the markers that define each group. Depending on if cells are selected or not
-#   observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-#     output$markers <- DT::renderDataTable({
-#       req(input$assay_2, metadata_options())
-#       cells <- isolate(rvalues$cells)
-#       grouping <- paste0(input$grouping_2,"_meta_data")
-#       if(!any(names(loom_data()[[input$assay_2]]$col.attrs) == grouping)){
-#         return(NULL)
-#       }
-#       group_assay <- paste(input$grouping_2, input$assay_2, sep = '_')
-#       if(any(group_assay %in% names(marker_tables)) & is.null(cells)){
-#         t <- marker_tables[[group_assay]]
-#         }else{
-#           y <- loom_data()[[input$assay_2]][[paste0('col_attrs/',grouping)]][]
-#           cell_ids <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
-#           cols <- unlist(lapply(cells[,1], function(x){
-#             grep(x ,cell_ids, fixed = TRUE)
-#             }))
-#           if(!is.null(cells)){
-#             y[cols] <- 'Selected'
-#           }
-#           if(length(unique(y))==1){
-#             showModal(modalDialog(p("Must have at least 2 groups defined to use Find Markers."), title = "Warning"), session = getDefaultReactiveDomain())
-#             return(NULL)
-#           }
-#         #t <- as.data.frame(top_markers(wilcoxauc(X = assay_matrices[[input$assay_2]], y = y), n = 10))[1:10,]
-#         exp_mat <- Matrix::t(Matrix::Matrix(loom_data()[[input$assay_2]]$matrix[,], sparse = TRUE))
-#         rownames(exp_mat) <- loom_data()[[input$assay_2]]$row.attrs$features[]
-#         colnames(exp_mat) <- loom_data()[[input$assay_2]]$col.attrs$CellID[]
-#         t <- as.data.frame(wilcoxauc(X = exp_mat, y = y))
-#         t <- t[-c(5,6)]
-#         t$Specificity <- t$pct_in/(t$pct_out+1)
-#         if(is.null(cells)){
-#           marker_tables[[group_assay]] <<- t
-#         }
-#       }
-#       if(!is.null(cells)){
-#         t <- t[which(t$group == "Selected"),]
-#       }
-#       return(t %>% arrange(desc(Specificity)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3))
-#       })
-#     })
-  
-#   #-- display selected grouping name --#
-#   output$annotation_title <- renderText({
-#     req(input$grouping_2, metadata_options())
-#     return(paste0(input$grouping_2))
-#     })
+  #-- Find the markers for the 1) selected cells compared to all other cells or
+  #-- 2) the markers that define each group. Depending on if cells are selected or not
+  observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
+    if(input$find.markers == 0){
+      output$markers <- NULL
+    }else{
+      output$markers <- DT::renderDataTable({
+        req(input$assay_2, rvalues$obs)
+        cells <- isolate(rvalues$cells)
+
+        y <- rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop = TRUE]
+
+        if(!is.null(cells)){
+          cols <- match(cells[,1], rvalues$cell_ids)
+          y[cols] <- 'Selected'
+        }
+
+        if(length(unique(y))==1){
+          showModal(modalDialog(p("Must have at least 2 groups defined to use Find Markers."), title = "Warning"), session = getDefaultReactiveDomain())
+          return(NULL)
+        }
+
+        rvalues$h5ad[[1]]$obs['scap_find_markers_groups'] <- reorder_levels(y)
+
+        scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = FALSE)
+
+        t <- rank_genes_groups_df(rvalues$h5ad[[1]])
+        t$group <- py_to_r(attr(t,which='pandas.index')$tolist())
+        colnames(t) <- c('feature', 'score', 'pval', 'pval_adj', 'logFC', 'group')
+        t <- t[,c(1, ncol(t), 2:(ncol(t)-1))]
+        if(!is.null(cells)){
+          t <- t[which(t$group == "Selected"),]
+        }
+        return(t %>% arrange(desc(logFC)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c('score', 'pval', 'pval_adj', 'logFC'), digits=3))
+        #return(t %>% arrange(desc(Specificity)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3))
+      })
+    }
+  })
+
+  #-- display selected grouping name --#
+  output$annotation_title <- renderText({
+    req(input$grouping_2, rvalues$obs)
+    return(paste0(input$grouping_2))
+  })
   
 #   #-- display text boxes for user to enter new IDs for the meta data --#
 #   output$annotations <- renderUI({

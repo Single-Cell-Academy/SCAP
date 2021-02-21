@@ -112,13 +112,7 @@ ui <- navbarPage(
         wellPanel(
           style  = 'background:white;',
           fluidRow(
-            conditionalPanel(condition = "input.nebulosa_on == 'no'", 
-                             plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-            ),
-
-            conditionalPanel(condition = "input.nebulosa_on == 'yes'", 
-                             plotOutput('featureplot_1_nebulosa', height = '120%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-            )
+            plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px')
           ),
           fluidRow(
             column(width = 3,
@@ -126,7 +120,7 @@ ui <- navbarPage(
               radioButtons('nebulosa_on', label = 'Nebulosa plot', choices = c('yes', 'no'), selected = 'no', inline = TRUE)
             ),
             column(width = 9,
-              uiOutput('featureplot_1_feature.select', style = 'padding: 10px')
+              uiOutput('featureplot_1_feature_select', style = 'padding: 10px')
             )
           )
         )
@@ -171,6 +165,7 @@ ui <- navbarPage(
     conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
     conditionalPanel(
       condition = 'input.assay_1',
+      fluidRow(
       sidebarPanel(
         uiOutput('assay_2'), ###! replace by assay_1
         tabsetPanel(
@@ -223,7 +218,10 @@ ui <- navbarPage(
               uiOutput('featureplot_2_feature_select',style = 'padding:10px')
               )
             )
-          ),
+          )
+        )
+      ),
+      fluidRow(
         wellPanel(
           style  = 'background: white;',
           fluidRow(
