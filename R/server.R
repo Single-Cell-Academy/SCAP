@@ -102,28 +102,28 @@ server <- function(input, output, session){
     init <<- 0
   })
 
-  observe({ # auto save h5ad file(s)
-    req(rvalues$h5ad)
-    invalidateLater(120000) # 2 min
-    if(init>0){
-      #tryCatch(
-      #  { 
-          cat(file = stderr(), paste0(rvalues$path_to_data, "\n"))
-          showNotification("Saving...", duration = NULL, id = 'auto_save')
-          for(i in 1:length(rvalues$path_to_data)){
-            rvalues$h5ad[[i]]$write(filename = rvalues$path_to_data[i])
-          }
-          removeNotification(id = 'auto_save')
-       # },
-       # error = function(e)
-       # {
-          #cat(file = stderr(), unlist(e))
-      #    showModal(modalDialog(p(paste0("An error occured trying to write to ", rvalues$path_to_data[i], ": ", unlist(e))), title = "Error writing to h5ad file."), session = getDefaultReactiveDomain())
-      #  }
-     # )
-    }
-    init <<- init + 1
-  })
+  # observe({ # auto save h5ad file(s)
+  #   req(rvalues$h5ad)
+  #   invalidateLater(120000) # 2 min
+  #   if(init>0){
+  #     #tryCatch(
+  #     #  { 
+  #         cat(file = stderr(), paste0(rvalues$path_to_data, "\n"))
+  #         showNotification("Saving...", duration = NULL, id = 'auto_save')
+  #         for(i in 1:length(rvalues$path_to_data)){
+  #           rvalues$h5ad[[i]]$write(filename = rvalues$path_to_data[i])
+  #         }
+  #         removeNotification(id = 'auto_save')
+  #      # },
+  #      # error = function(e)
+  #      # {
+  #         #cat(file = stderr(), unlist(e))
+  #     #    showModal(modalDialog(p(paste0("An error occured trying to write to ", rvalues$path_to_data[i], ": ", unlist(e))), title = "Error writing to h5ad file."), session = getDefaultReactiveDomain())
+  #     #  }
+  #    # )
+  #   }
+  #   init <<- init + 1
+  # })
 
   ###==============// MAIN TAB //==============####
   
@@ -535,6 +535,13 @@ server <- function(input, output, session){
         rvalues$h5ad[[i]]$obs[input$new_scheme_name] <- new
       }
       rvalues$obs <- rvalues$h5ad[[1]]$obs_keys()
+      showNotification("Saving...", duration = NULL, id = 'save_annot')
+          for(i in 1:length(rvalues$path_to_data)){
+            rvalues$h5ad[[i]]$write(filename = rvalues$path_to_data[i])
+          }
+      Sys.sleep(1)
+      removeNotification(id = 'save_annot')
+      Sys.sleep(1)
       showNotification("New annotations added!", type = 'message')
     }
   })
@@ -645,6 +652,11 @@ server <- function(input, output, session){
       }
       Sys.sleep(2)
       removeModal(session = getDefaultReactiveDomain())
+      showNotification("Saving...", duration = NULL, id = 'save_meta')
+      for(i in 1:length(rvalues$path_to_data)){
+        rvalues$h5ad[[i]]$write(filename = rvalues$path_to_data[i])
+      }
+      removeNotification(id = 'save_meta')
     }
   })
 
@@ -658,8 +670,6 @@ server <- function(input, output, session){
   output$chosen_new_directory <- renderText(parseDirPath(roots = volumes, selection = input$new_directory))
   
   observeEvent(input$object_file, ignoreInit = T, ignoreNULL = T, {
-    print(input$object_file)
-    message(input$object_file)
     file_path <- parseFilePaths(selection = input$object_file, roots = volumes)$datapath
     if(identical(file_path,character(0))){
       return(NULL)
