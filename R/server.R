@@ -43,7 +43,7 @@ server <- function(input, output, session){
   
   options(shiny.maxRequestSize=500*1024^2)
 
-  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL)
+  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL)
 
   ## Determine folders for ShinyDir button
   volumes <- c("FTP" = "/ftp", Home = fs::path_home())
@@ -96,24 +96,32 @@ server <- function(input, output, session){
     rvalues$reductions <- reductions
     rvalues$cell_ids <- rownames(data[[1]]$obs)
     rvalues$h5ad <- data
+    rvalues$path_to_data <- h5ad_files
   })
-  
-  ## Florian: What is this variable doing here? Why is it not reactive?
-  marker_tables <- list()
-  
-  #-- and store normalized count matrix in memory for speed --#
-  #=========== SHOULD DECIDE IF DOING THIS IS A GOOD IDEA OR NOT ==========#
-  # observeEvent(loom_data(), ignoreInit = TRUE, {
-  #   showModal(modalDialog(p("Initializing data for better performance...This may take a little while."), title = paste0("Getting things set up for ", input$directory[[1]][2])), session = getDefaultReactiveDomain())
-  #   marker_tables <<- list()
-  #   for(x in names(data)){
-  #     assay_matrices[[x]] <<- t(Matrix(data = data[[x]]$matrix[,], sparse = TRUE))
-  #     rownames(assay_matrices[[x]]) <<- data[[x]]$row.attrs$features[]
-  #     colnames(assay_matrices[[x]]) <<- data[[x]]$col.attrs$CellID[]
-  #   }
-  #   cells <<- NULL
-  #   removeModal(session = getDefaultReactiveDomain())
-  # })
+
+  init <- 0
+  observe({ # auto save h5ad file(s)
+    req(rvalues$h5ad)
+    invalidateLater(120000) # 2 min
+    if(init>0){
+      #tryCatch(
+      #  { 
+          cat(file = stderr(), paste0(rvalues$path_to_data, "\n"))
+          showNotification("Saving...", duration = NULL, id = 'auto_save')
+          for(i in 1:length(rvalues$path_to_data)){
+            rvalues$h5ad[[i]]$write(filename = rvalues$path_to_data[i])
+          }
+          removeNotification(id = 'auto_save')
+       # },
+       # error = function(e)
+       # {
+          #cat(file = stderr(), unlist(e))
+      #    showModal(modalDialog(p(paste0("An error occured trying to write to ", rvalues$path_to_data[i], ": ", unlist(e))), title = "Error writing to h5ad file."), session = getDefaultReactiveDomain())
+      #  }
+     # )
+    }
+    init <<- init + 1
+  })
 
   ###==============// MAIN TAB //==============####
   
@@ -124,7 +132,8 @@ server <- function(input, output, session){
       choices = names(rvalues$h5ad), 
       selected = ifelse(any(names(rvalues$h5ad)=="RNA"),
         yes = "RNA",
-        no = names(rvalues$h5ad)[1]))
+        no = names(rvalues$h5ad)[1])
+      )
   })
 
   #-- Display name of data --#
@@ -141,10 +150,12 @@ server <- function(input, output, session){
   output$grouping_1 <- renderUI({
     req(input$assay_1, rvalues$obs)
     assay <- input$assay_1
-    if(any(grepl("seurat_clusters", rvalues$obs, ignore.case = FALSE))){
-      sel <- rvalues$obs[grep("seurat_clusters", rvalues$obs)]
+    if(any(grepl("seurat_clusters", rvalues$obs, ignore.case = TRUE))){
+      sel <- rvalues$obs[grep("seurat_clusters", rvalues$obs, , ignore.case = TRUE)]
     }else if(any(grepl(paste0(tolower(assay),"_clusters"), rvalues$obs, ignore.case = TRUE))){
-      sel <- paste0(tolower(assay),"_clusters")
+      sel <- rvalues$obs[grep(paste0(tolower(assay),"_clusters"), rvalues$obs, , ignore.case = TRUE)]
+    }else if(any(grepl("louvain", rvalues$obs, ignore.case = TRUE))){
+      sel <- rvalues$obs[grep("louvain", rvalues$obs, ignore.case = TRUE)]
     }else{
       sel <- rvalues$obs[1]
     }
@@ -467,195 +478,174 @@ server <- function(input, output, session){
     return(paste0(input$grouping_2))
   })
   
-#   #-- display text boxes for user to enter new IDs for the meta data --#
-#   output$annotations <- renderUI({
-#     req(input$assay_2, metadata_options())
-#     group.by <- paste0(input$grouping_2,'_meta_data')
-#     if(!group.by%in%names(loom_data()[[input$assay_2]]$col.attrs)){
-#       return(NULL)
-#     }
-#     names <- unique(loom_data()[[input$assay_2]][[paste0('col_attrs/',group.by)]][])
-#     names <- mixedsort(names)
-#     id <- "my_annot"
-#     lapply(1:length(names), function(x){
-#       textInput(inputId = paste0(names[x],"_",id), label = names[x], placeholder = names[x])
-#       })
-#     })
+  #-- display text boxes for user to enter new IDs for the meta data --#
+  output$annotations <- renderUI({
+    req(input$assay_2, input$grouping_2)
+    names <- mixedsort(unique(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop = TRUE]))
+    id <- "my_annot"
+    lapply(1:length(names), function(x){
+      textInput(inputId = paste0(names[x],"_",id), label = names[x], placeholder = names[x])
+    })
+  })
   
-#   #-- add user defined annotations to selected cells --#
-#   observeEvent(input$add_to_tmp,{
-#     if(is.null(rvalues$cells)){
-#       showNotification("Please select cells from either plot first", type = 'warning')
-#       }else if(is.null(input$custom_name) | input$custom_name == ""){
-#         showNotification("Please enter an annotation name", type = 'warning')
-#         }else{
-#           rvalues$tmp_annotations[which(names(rvalues$tmp_annotations)%in%rvalues$cells[,1])] <- input$custom_name
-#         }
-#         })
+  #-- add user defined annotations to selected cells --#
+  observeEvent(input$add_to_tmp,{
+    if(is.null(rvalues$cells)){
+      showNotification("Please select cells from either plot first", type = 'warning')
+    }else if(is.null(input$custom_name) | input$custom_name == ""){
+      showNotification("Please enter an annotation name", type = 'warning')
+    }else{
+      rvalues$tmp_annotations[which(names(rvalues$tmp_annotations)%in%rvalues$cells[,1])] <- input$custom_name
+    }
+  })
 
-#   #-- save user defined annotations --#
-#   observeEvent(input$set_cell_types, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-#     req(metadata_options())
-#     group.by <- paste0(input$grouping_2,'_meta_data')
-#     id <- "my_annot"
-#     if(is.null(input$new_scheme_name) || input$new_scheme_name == "" || input$new_scheme_name == " "){
-#       showNotification("Please name the annotation scheme", type = 'warning')
-#       }else if(input$annot_panel == 'cell_annotation_cluster'){
-#         names <- loom_data()[[input$assay_2]][[paste0('col_attrs/',group.by)]][]
-#         new <- names
-#         names <- unique(names)
-#         for(i in 1:length(names)){
-#           new[which(new == names[i])] <- input[[paste0(names[i],"_",id)]]
-#           if(is.null(input[[paste0(names[i],"_",id)]]) | input[[paste0(names[i],"_",id)]] == ""){
-#             showNotification("Names must be provided for each group", type = 'warning')
-#             return()
-#           }
-#         }
-#         new <- list(new)
-#         names(new) <- input$new_scheme_name
-#         if(!grepl("_meta_data$",names(new))) names(new) <- paste0(names(new),"_meta_data")
-#         for(i in 1:length(loom_data())){
-#           loom_data()[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
-#         }
-#         }else{
-#           if(all(rvalues$tmp_annotations=='unlabled')){
-#             showNotification("No annotations have been added", type = 'warning')
-#             }else if(is.null(input$new_scheme_name) | input$new_scheme_name==""){
-#               showNotification("Please enter an name for the annotation scheme", type = 'warning')
-#               }else{
-#                 new <- list(rvalues$tmp_annotations)
-#                 names(new) <- input$new_scheme_name
-#                 if(!grepl("_meta_data$",names(new))){
-#                   names(new) <- paste0(names(new),"_meta_data")
-#                 }
-#                 for(i in 1:length(loom_data())){
-#                   loom_data()[[i]]$add.col.attribute(attributes = new, overwrite = TRUE)
-#                 } 
-#               }
-#             }
-#             loom.trigger$trigger()
-#             })
+  #-- store user defined annotations --#
+  observeEvent(input$set_cell_types, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
+    req(rvalues$obs)
+    group.by <- paste0(input$grouping_2)
+    id <- "my_annot"
+    if(is.null(input$new_scheme_name) || input$new_scheme_name == "" || input$new_scheme_name == " "){
+      showNotification("Please name the annotation scheme", type = 'warning')
+    }else if(input$new_scheme_name %in% rvalues$obs){
+      showModal(modalDialog(p(paste0("ERROR ", input$new_scheme_name, " is already in the metadata. Please choose a unique name.")), title = "Error adding metadata"), session = getDefaultReactiveDomain())
+    }else{
+      if(input$annot_panel == 'cell_annotation_cluster'){
+        names <- rvalues$h5ad[[1]]$obs[group.by][,,drop = TRUE]
+        new <- names
+        names <- unique(names)
+        for(i in 1:length(names)){
+          new[which(new == names[i])] <- input[[paste0(names[i],"_",id)]]
+          if(is.null(input[[paste0(names[i],"_",id)]]) | input[[paste0(names[i],"_",id)]] == ""){
+            showNotification("Names must be provided for each group", type = 'warning')
+            return()
+          }
+        }
+      }else{
+        if(all(rvalues$tmp_annotations=='unlabled')){
+          showNotification("No annotations have been added", type = 'warning')
+        }else if(is.null(input$new_scheme_name) | input$new_scheme_name==""){
+          showNotification("Please enter an name for the annotation scheme", type = 'warning')
+        }else{
+          new <- rvalues$tmp_annotations
+        }
+      }
+      for(i in 1:length(rvalues$h5ad)){
+        rvalues$h5ad[[i]]$obs[input$new_scheme_name] <- new
+      }
+      rvalues$obs <- rvalues$h5ad[[1]]$obs_keys()
+      showNotification("New annotations added!", type = 'message')
+    }
+  })
   
-#   #-- genes to search from for ncbi query --#
-#   output$gene_query <- renderUI({
-#     req(input$assay_2)
-#     assay <- input$assay_2
-#     selectInput(inputId = 'gene_query', label = 'Select a gene of interest to learn more', choices = loom_data()[[assay]][['row_attrs/features']][], selected = NA, multiple = FALSE)
-#     })
+  #-- genes to search from for ncbi query --#
+  output$gene_query <- renderUI({
+    req(rvalues$features)
+    selectInput(inputId = 'gene_query', label = 'Select a gene of interest to learn more', choices = rvalues$features, selected = NA, multiple = FALSE)
+  })
+
+  #-- get gene summary from ncbi --#
+  observeEvent(input$query_ncbi,{
+    if(is.null(input$gene_query) | is.na(input$gene_query) | identical(input$gene_query, "") | identical(input$gene_query, " ")){
+      showNotification("A valid gene must be entered", type = "error")
+      return(NULL)
+    }
+    id <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=gene&term=", input$gene_query, "[sym]+AND+",input$organism,"[orgn]&retmode=json"))$esearchresult$idlist
+    if(identical(id, list())){
+      output$gene_summary <- renderText({"Error: No genes matching this query were found on NCBI"})
+    }else{
+    if(length(id)>1){
+      showNotification('Caution: More that one gene matched this query. Only showing first match', type = 'warning')
+      id <- id[1]
+    }
+    output$gene_summary <- renderText({
+      results <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=gene&id=",id,"&retmode=json"))$result[[2]]
+      name <- results$name
+      alias <- results$otheraliases
+      summary <- results$summary
+      return(paste0("[id=",id,"][name=",name,"][aliases=", paste(alias, collapse = " "),"][summary=",summary,"]"))
+    })
+    }
+  })
   
-#   #-- get gene summary from ncbi --#
-#   observeEvent(input$query_ncbi,{
-#     if(is.null(input$gene_query) | is.na(input$gene_query) | identical(input$gene_query, "") | identical(input$gene_query, " ")){
-#       showNotification("A valid gene must be entered", type = "error")
-#       return(NULL)
-#     }
-#     id <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=gene&term=", input$gene_query, "[sym]+AND+",input$organism,"[orgn]&retmode=json"))$esearchresult$idlist
-#     #print(id)
-#     if(identical(id, list())){
-#       output$gene_summary <- renderText({"Error: No genes matching this query were found on NCBI"})
-#       }else{
-#         if(length(id)>1){
-#           showNotification('Caution: More that one gene matched this query. Only showing first match', type = 'warning')
-#           id <- id[1]
-#         }
-#         output$gene_summary <- renderText({
-#           results <- fromJSON(file = paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=gene&id=",id,"&retmode=json"))$result[[2]]
-#         #print(str(results))
-#         name <- results$name
-#         #print(name)
-#         alias <- results$otheraliases
-#         #print(alias)
-#         summary <- results$summary
-#         #print(summary)
-#         return(paste0("[id=",id,"][name=",name,"][aliases=", paste(alias, collapse = " "),"][summary=",summary,"]"))
-#         })
-#       }
-#       })
-  
-  
-  
-#   ###==============// CUSTOM META DATA TAB //==============####
-  
-#   #-- select input for Assay --#
-#   output$assay_3 <- renderUI({
-#     req(loom_data())
-#     selectInput('assay_3', "Select Assay", choices = names(loom_data()), selected = ifelse(any(names(loom_data())=="RNA"),yes = "RNA",no = names(loom_data())[1]))
-#     })
-  
-#   #-- select meta data to combine --#
-#   output$meta_group_checkbox <- renderUI({
-#     req(input$assay_3, loom_data())
-#     choices <- metadata_options()
-#     choices <- sub('_meta_data','',choices)
-#     checkboxGroupInput(inputId = 'meta_group_checkbox', label = 'Meta Data', choices = choices)
-#     })
-  
-#   #-- display the order of the selected meta data --#
-#   output$example_meta_group_name <- renderText({
-#     req(loom_data())
-#     if(is.null(rvalues$order) || is.na(rvalues$order) || length(rvalues$order) == 0){
-#       return(NULL)
-#     }
-#     paste(sub('_meta_data$','',rvalues$order),collapse=" + ")
-#     })
-  
-#   #-- display a sample of what the combined meta data will resemble --#
-#   output$example_meta_group <- renderTable({
-#     req(input$assay_3)
-#     if(is.null(rvalues$order) || is.na(rvalues$order) || length(rvalues$order) == 0){
-#       return(NULL)
-#     }
-#     ex <- loom_data()[[input$assay_3]]$get.attribute.df(attributes = rvalues$order)
-#     ex_df <- as.data.frame(apply(X = ex, MARGIN = 1, FUN = paste, collapse = '_'), stringsAsFactors = FALSE)[sample(x = 1:nrow(ex),size = 20,replace = FALSE),,drop=F]
-#     colnames(ex_df) <- 'Examples of chosen meta data combination'
-#     return(ex_df)
-#     }, hover = TRUE, width = '100%',align = 'c')
-  
-#   #-- update the 'order' global variable whenever the checkbox group is selected/deselected --#
-#   observeEvent(input$meta_group_checkbox, ignoreNULL = F,{
-#     req(loom_data())
-#     if(!is.null(input$meta_group_checkbox)){
-#       new <- paste0(input$meta_group_checkbox,'_meta_data')
-#       if(length(new)>length(rvalues$order) | is.null(rvalues$order)){
-#         new <- new[!new%in%rvalues$order]
-#         rvalues$order <- c(rvalues$order, new)
-#         }else if(identical(new, character(0))){
-#           rvalues$order <- NULL
-#           }else{
-#             rvalues$order <- rvalues$order[-which(!rvalues$order%in%new)]
-#           }
-#           }else{
-#             rvalues$order <- NULL
-#           }
-#           })
-  
-#   #-- add custom metadata grouping to loom file --#
-#   observeEvent(input$add_new_meta_group,{
-#     if(is.null(input$meta_group_checkbox) || length(input$meta_group_checkbox)<2){
-#       showNotification('At least two meta data groups must be selected!', type = 'error')
-#       }else if(is.null(input$new_meta_group) || input$new_meta_group == ''){
-#         showNotification('A name for the meta data must be provided!', type = 'error')
-#         }else if(paste0(input$new_meta_group,'_meta_data') %in% names(loom_data()[[input$assay_3]]$col.attrs)){
-#           showNotification('The chosen meta data name already exists! Please select a unique name.', type = 'error')
-#           }else{
-#             ex <- loom_data()[[input$assay_3]]$get.attribute.df(attributes = rvalues$order)
-#             ex_list <- list(apply(X = ex, MARGIN = 1, FUN = paste, collapse = '_'))
-#             if(grepl('_meta_data$', input$new_meta_group)==FALSE){
-#               names(ex_list) <- paste0(input$new_meta_group,'_meta_data')
-#               }else{
-#                 names(ex_list) <- input$new_meta_group
-#               }
-#               showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after completion"), session = getDefaultReactiveDomain())
-#               Sys.sleep(2)
-#               for(i in 1:length(loom_data())){
-#                 loom_data()[[i]]$add.col.attribute(attributes = ex_list, overwrite = TRUE)
-#               }
-#               loom.trigger$trigger()
-#               Sys.sleep(2)
-#               removeModal(session = getDefaultReactiveDomain())
-#             }
-#             })
-  
+  ###==============// CUSTOM META DATA TAB //==============####
+
+  #-- select input for Assay --#
+  output$assay_3 <- renderUI({
+    req(rvalues$h5ad)
+    selectInput('assay_3', "Select Assay", 
+      choices = names(rvalues$h5ad), 
+      selected = ifelse(any(names(rvalues$h5ad)=="RNA"),
+        yes = "RNA",
+        no = names(rvalues$h5ad)[1])
+      )  
+  })
+
+  #-- select meta data to combine --#
+  output$meta_group_checkbox <- renderUI({
+    req(input$assay_3, rvalues$h5ad)
+    checkboxGroupInput(inputId = 'meta_group_checkbox', label = 'Meta Data', choices = rvalues$obs)
+  })
+
+  #-- display the order of the selected meta data --#
+  output$example_meta_group_name <- renderText({
+    req(rvalues$h5ad)
+    if(is.null(rvalues$order) || is.na(rvalues$order) || length(rvalues$order) == 0){
+      return(NULL)
+    }
+    paste(rvalues$order,collapse=" + ")
+  })
+
+  #-- display a sample of what the combined meta data will resemble --#
+  output$example_meta_group <- renderTable({
+    req(input$assay_3)
+    if(is.null(rvalues$order) || is.na(rvalues$order) || length(rvalues$order) == 0){
+      return(NULL)
+    }
+    ex <- rvalues$h5ad[[1]]$obs[rvalues$order]
+    ex_df <- as.data.frame(apply(X = ex, MARGIN = 1, FUN = paste, collapse = '_'), stringsAsFactors = FALSE)[sample(x = 1:nrow(ex),size = 20,replace = FALSE),,drop=F]
+    colnames(ex_df) <- 'Examples of chosen meta data combination'
+    return(ex_df)
+  }, hover = TRUE, width = '100%',align = 'c')
+
+  #-- update the 'order' global variable whenever the checkbox group is selected/deselected --#
+  observeEvent(input$meta_group_checkbox, ignoreNULL = F,{
+    req(rvalues$h5ad)
+    if(!is.null(input$meta_group_checkbox)){
+      new <- input$meta_group_checkbox
+      if(length(new)>length(rvalues$order) | is.null(rvalues$order)){
+        new <- new[!new%in%rvalues$order]
+        rvalues$order <- c(rvalues$order, new)
+      }else if(identical(new, character(0))){
+        rvalues$order <- NULL
+      }else{
+        rvalues$order <- rvalues$order[-which(!rvalues$order%in%new)]
+      }
+    }else{
+    rvalues$order <- NULL
+    }
+  })
+
+  #-- add custom metadata grouping to loom file --#
+  observeEvent(input$add_new_meta_group,{
+    if(is.null(input$meta_group_checkbox) || length(input$meta_group_checkbox)<2){
+      showNotification('At least two meta data groups must be selected!', type = 'error')
+    }else if(is.null(input$new_meta_group) || input$new_meta_group == ''){
+      showNotification('A name for the meta data must be provided!', type = 'error')
+    }else if(input$new_meta_group %in% rvalues$obs){
+      showNotification('The chosen meta data name already exists! Please select a unique name.', type = 'error')
+    }else{
+      ex <- rvalues$h5ad[[1]]$obs[rvalues$order]
+      ex_list <- list(apply(X = ex, MARGIN = 1, FUN = paste, collapse = '_'))
+      showModal(modalDialog(p(paste0("Adding ", input$new_meta_group, " to meta data...")), title = "This window will close after completion"), session = getDefaultReactiveDomain())
+      Sys.sleep(2)
+      for(i in 1:length(rvalues$h5ad)){
+        rvalues$h5ad[[i]]$obs[input$new_meta_group] <- unlist(ex_list)
+      }
+      Sys.sleep(2)
+      removeModal(session = getDefaultReactiveDomain())
+    }
+  })
+
   ###==============// FILE CONVERSION TAB //==============####
   
   shinyFileChoose(input, "object_file", roots = volumes, session = session)
@@ -793,8 +783,19 @@ server <- function(input, output, session){
     }else{
       path_to_legacy <- NULL
     }
+
+    out_file <- input$out_file_to_h5ad
+    if(grepl("\\.h5ad$", out_file) == FALSE){
+      out_file <- paste0(out_file, ".h5ad")
+    }
+    out_path <- file.path(dir_path, out_file)
+    if(out_file %in% list.files(dir_path)){
+      showModal(modalDialog(p(paste0("Error: ", out_file, " already exisits in ", dir_path, ". Please choose a unique file.")), title = "File already exists."), session = getDefaultReactiveDomain())
+      return(NULL)
+    }
+
     showModal(modalDialog(p("Converting to h5ad. Please Wait..."), title = "This window will close after conversion is complete"), session = getDefaultReactiveDomain())
-    error <- scap_to_h5ad(in_file = path_to_in_file, out_dir = dir_path, out_file = input$out_file_to_h5ad, old_file = path_to_legacy)
+    error <- scap_to_h5ad(in_file = path_to_in_file, out_path = out_path, old_file = path_to_legacy)
     removeModal(session = getDefaultReactiveDomain())
     if(error == 0){
       showModal(modalDialog(p("Expecting Rds or loom file"), title = "Error"), session = getDefaultReactiveDomain())

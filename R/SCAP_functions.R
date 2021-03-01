@@ -334,11 +334,8 @@ detect_legacy_scap <- function(loom){
   }
 }
 
-scap_to_h5ad <- function(in_file, out_dir, out_file, old_file, modality = "RNA"){
-  if(grepl("\\.h5ad$", out_file) == FALSE){
-    out_file <- paste0(out_file, ".h5ad")
-  }
-  out_path <- file.path(out_dir, out_file)
+scap_to_h5ad <- function(in_file, out_path, old_file, modality = "RNA"){
+  anndata <- import('anndata')
   if(grepl("\\.rds$", in_file, ignore.case = TRUE)){
     obj <- readRDS(in_file)
   }else if(grepl("\\.loom$", in_file, ignore.case = TRUE)){
@@ -375,13 +372,20 @@ scap_to_h5ad <- function(in_file, out_dir, out_file, old_file, modality = "RNA")
         }
       }
     }else{
-      anndata <- import('anndata')
-      ad <- anndata$read_loom(file)
-      ad$write()
+      lf <- anndata$read_loom(file)
+      lf$write(out_path)
     }
   }else{
     return(-4)
   }
+  #------ required to fix anndata.write ValueError: '_index' is a reserved name for dataframe columns. Above error raised while writing key 'raw/var' of <class 'h5py._hl.files.File'> from /. ------#
+  cat(file = stderr(), "raw/var correction...\n")
+  a = anndata$read(out_path)
+  py$tmp = a
+  py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].rename(columns={'_index': 'features'})")
+  a = py$tmp
+  a$write(out_path)
+  #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------#
   return(1)
 }
 
@@ -584,8 +588,6 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   plot.data <- cbind(reduc.in, group.by[[1]])
   colnames(plot.data) <- c(colnames(reduc.in), names(group.by)[1])
   rownames(plot.data) <- names(group.by[[1]])
-
-  cat(file = stderr(), paste(head(rownames(plot.data))))
 
   ax.x <- list(
     title = colnames(reduc.in)[1],
@@ -902,7 +904,6 @@ split_dot_plot <- function(data.features = NULL,
       break
     }
   }
-  cat('\n\n')
   return(p)
 }
 

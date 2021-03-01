@@ -34,8 +34,6 @@ ui <- navbarPage(
   theme = shinytheme('cosmo'),
   title = "Single Cell Analysis Portal",
   
-  
-  
   tabPanel(
     "Main",
     value = 'main',
@@ -175,12 +173,13 @@ ui <- navbarPage(
             "Annotate Clusters",
             uiOutput('grouping_2'),
             h2(textOutput('annotation_title')),
-            uiOutput('annotations')
+            uiOutput('annotations'),
+            tags$head(tags$style("#annotations{overflow-y:scroll; max-height: 200px; background: white;}"))
             ),
           tabPanel(
             value = 'cell_annotation_custom',
             "Custom Annotations",
-            h2('Select groups of cells from either scatter plot and annotate them'),
+            h3('Select groups of cells from either scatter plot and annotate them'),
             h3('Name selected cells'),
             fluidRow(
               column(
@@ -498,7 +497,7 @@ ui <- navbarPage(
               shinyFilesButton(id = "in_file_to_h5ad", label = "Choose File to Convert", title = "Choose File to Convert", multiple = F, style = "width:100%"),
               textInput('out_file_to_h5ad', label = 'File name for h5ad Output', value = NA, placeholder = "Save h5ad File As"),
               shinyDirButton(id = "out_dir_to_h5ad", label = "Select where to save h5ad file", title = "Select where to save h5ad file", style = "width:100%"),
-              radioButtons('is_legacy', label = "Legacy Conversion?", choices = c("yes", "no"), inline = T),
+              radioButtons('is_legacy', label = "Legacy Conversion?", choices = c("yes", "no"), selected = "no", inline = T),
               conditionalPanel(
                 condition = "input.is_legacy=='yes'",
                 shinyFilesButton(id = "legacy_file_to_h5ad", label = "Choose Original Seurat Object", title = "Choose Original Seurat Object for Legacy Conversion", multiple = F, style = "width:100%")
