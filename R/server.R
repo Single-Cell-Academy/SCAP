@@ -38,6 +38,8 @@ source_python("../Python/rank_genes_groups_df.py")
 anndata <- import('anndata')
 scanpy <- import('scanpy')
 
+init <- 0 # flag for autosave
+
 server <- function(input, output, session){
   session$onSessionEnded(stopApp)
   
@@ -97,9 +99,9 @@ server <- function(input, output, session){
     rvalues$cell_ids <- rownames(data[[1]]$obs)
     rvalues$h5ad <- data
     rvalues$path_to_data <- h5ad_files
+    init <<- 0
   })
 
-  init <- 0
   observe({ # auto save h5ad file(s)
     req(rvalues$h5ad)
     invalidateLater(120000) # 2 min
