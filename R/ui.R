@@ -355,51 +355,6 @@ ui <- navbarPage(
                            )
             )
            ),
-  
-  # ### scPred panel, temporarily disabled
-  # tabPanel("scPred",
-  #  conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
-  #  conditionalPanel(
-  #    condition = 'input.assay_1',
-  #    sidebarPanel(
-  #      h3("Project your cells unto a dataset:",align="left"),
-  #      selectInput(inputId="scpred_species", label="Choose a species!",
-  #        choices=c("Mouse","Human"),
-  #        selected="Mouse", multiple=FALSE, selectize=FALSE),
-  # 
-  #      uiOutput("scpred_data_list"),
-  #      sliderInput("pred_threshold", label = "Choose your prediction threshold:",
-  #        0, 1,
-  #        value = 0.9, step = 0.01),
-  #      uiOutput("predict_cells_button")
-  #      ),
-  # 
-  #            # Show a plot of the generated distribution
-  #            mainPanel(
-  # 
-  #              # # Info box containing information about the selected dataset
-  #              h1("Explanation"),
-  #              p("You can use this Panel to predict cell types in your data from published, annotated Datasets.
-  #                We have prepared several public datasets from different species (Human, Mouse),
-  #                technologies (SMART-seq2,10x) and Organs for you to use. Simply select the type of dataset you
-  #                want to use as a reference in the sidebar on the left. To predict cell types, we are using scPred,
-  #                a recently published algorithm that uses scalable vector machines to predict cell types against a pretrained dataset
-  #                To learn more about scPred, click this link:"),
-  #              tags$a(href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1862-5", "scPred Manuscript!"),
-  #              h1("Results"),
-  # 
-  #              h2("Save predictions:"),
-  #              br(),
-  #              uiOutput("add_predictions_button"),
-  #              br(),
-  #              h2("Score distributions for predictions:"),
-  #              plotOutput("predictions_scores"),
-  #              br(),
-  #              h2("Distribution of predicted cell types:"),
-  #              plotOutput("predictions_plot")
-  #              )
-  #            )
-  #          ), # end of tabPanel
 
   tabPanel("Compare annotations",
     conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
