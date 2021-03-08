@@ -317,6 +317,7 @@ ui <- navbarPage(
       )
     ),
   
+  #### Scibet panel
   tabPanel("SciBet",
             conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
             conditionalPanel(
@@ -340,7 +341,7 @@ ui <- navbarPage(
                            h1("Explanation"),
                            p("You can use this Panel to predict cell types in your data from published, annotated Datasets using SciBet. See the table below,
                              for more information on available references:"),
-                           tags$a(href="https://www.nature.com/articles/s41467-020-15523-2", "SciBet Manuscript!"),
+                           tags$a(href="https://www.nature.com/articles/s41467-020-15523-2",target = "blank", "SciBet Manuscript!"),
                            
                            
                            h2("References available"),
@@ -356,6 +357,8 @@ ui <- navbarPage(
             )
            ),
 
+  
+  #### Compare annotations
   tabPanel("Compare annotations",
     conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
     conditionalPanel(

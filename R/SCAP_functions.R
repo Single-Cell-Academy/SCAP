@@ -25,6 +25,25 @@ library("reticulate")
 
 palette <- colorRampPalette(c("lightgrey", viridis(10)))
 
+check_if_obs_cat <- function(obs_names,
+                             obs_df){
+  obs_cat <- c()
+  for(obs in obs_names){
+    annotation <- obs_df[obs][,,drop=TRUE]
+    if(is.numeric(annotation)){ ## Check if the annotation is numeric
+      uniq_groups <- length(unique(annotation))
+      if(uniq_groups <= 50){
+        category <- obs # categorical
+        obs_cat <- c(obs_cat,category)
+      }
+    }else{
+      category <- obs
+      obs_cat <- c(obs_cat,category)
+    }
+  }
+  return(obs_cat)
+}
+
 save_figure <- function(file_type, file_name, units, height, width, resolution, to_plot){
   if(file_type == "png"){
     png(filename = file_name, units = units, height = height, width = width, res = resolution)
