@@ -44,7 +44,7 @@ server <- function(input, output, session){
   
   options(shiny.maxRequestSize=500*1024^2)
 
-  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL)
+  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL)
 
   ## Determine folders for ShinyDir button
   volumes <- c("FTP" = "/ftp", Home = fs::path_home())
@@ -85,6 +85,22 @@ server <- function(input, output, session){
     names(data) <- assays
     rvalues$features <- rownames(data[[1]]$var)
     rvalues$obs <- data[[1]]$obs_keys()
+    ## Determine type of annotation and create a layer to annotate for easy usage later on
+    obs_cat <- c()
+    for(obs in data[[1]]$obs_keys()){
+      annotation <- data[[1]]$obs[obs][,,drop=TRUE]
+      if(is.numeric(annotation)){ ## Check if the annotation is numeric
+        uniq_groups <- length(unique(annotation))
+        if(uniq_groups <= 50){
+          category <- obs # categorical
+          obs_cat <- c(obs_cat,category)
+        }
+      }else{
+        category <- obs
+        obs_cat <- c(obs_cat,category)
+      }
+    }
+    rvalues$obs_cat <- obs_cat
     reductions <- data[[1]]$obsm$as_dict()
     reduction_keys <- data[[1]]$obsm_keys()
     r_names <- rownames(data[[1]]$obs)
@@ -833,10 +849,10 @@ server <- function(input, output, session){
 
   #-- get the first list of potential annotations from loom--#
   output$comp_anno_list1 <- renderUI({
-    req(input$assay_1, rvalues$obs)
+    req(input$assay_1, rvalues$obs, rvalues$obs_cat)
 
     ## get annotation options from rvalues
-    annotation_options <- rvalues$obs
+    annotation_options <- rvalues$obs_cat
     
     #group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     selectInput(
@@ -850,7 +866,7 @@ server <- function(input, output, session){
   output$comp_anno_list2 <- renderUI({
     req(input$assay_1,input$comp_anno_1)
 
-    annotation_options <- rvalues$obs
+    annotation_options <- rvalues$obs_cat
     annotation_options <- annotation_options[!grepl(input$comp_anno_1,annotation_options)]
 
     selectInput(
