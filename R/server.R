@@ -28,8 +28,7 @@ library("reticulate")
 reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 
 #### Variables that persist across sessions
-## Read in table with datasets available for scPred
-#datasets_scpred <- fread("../meta/SCAP_scpred_datasets.tsv")
+## Read in table with datasets available for SciBet
 datasets_scibet <- fread("../meta/SciBet_reference_list.tsv")
 ## Source functions
 source("SCAP_functions.R")
@@ -830,101 +829,95 @@ server <- function(input, output, session){
 #   #-- Functions for annotation comparison--#
 #   ####
 
-#   ## Make meta data annotations a reactive object instead of performing all of the calles 3 times! 
+#   ## Make meta data annotations a reactive object instead of performing all of the calles 3 times!
 
-#   #-- get the first list of potential annotations from loom--#
-#   output$comp_anno_list1 <- renderUI({
-#     req(loom_data(), metadata_options())
+  #-- get the first list of potential annotations from loom--#
+  output$comp_anno_list1 <- renderUI({
+    req(input$assay_1, rvalues$obs)
 
-#     grouping_options <- metadata_options()
+    ## get annotation options from rvalues
+    annotation_options <- rvalues$obs
     
-#     selectInput(
-#       inputId = 'comp_anno_1', 
-#       label = 'Select the annotation you want to compare!', 
-#       choices = sub("_meta_data$","",metadata_options()), 
-#       multiple = FALSE)
-#     })
-  
-#   #-- second list of annotations to compare against--#
-#   output$comp_anno_list2 <- renderUI({
-#     req(loom_data(), input$comp_anno_1)
+    #group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
+    selectInput(
+      inputId = 'comp_anno_1',
+      label = 'Select the annotation you want to compare!',
+      choices = annotation_options,
+      multiple = FALSE)
+    })
 
-#     grouping_options <- metadata_options()
+  #-- second list of annotations to compare against--#
+  output$comp_anno_list2 <- renderUI({
+    req(input$assay_1,input$comp_anno_1)
 
-#     grouping_options <- grouping_options[!grepl(paste(input$comp_anno_1,"_meta_data",sep=""),grouping_options)]
-    
-#     selectInput(
-#       inputId = 'comp_anno_2', 
-#       label = 'Select the annotation to compare against!', 
-#       choices = sub("_meta_data$","",grouping_options), 
-#       multiple = FALSE)  })
-  
+    annotation_options <- rvalues$obs
+    annotation_options <- annotation_options[!grepl(input$comp_anno_1,annotation_options)]
+
+    selectInput(
+      inputId = 'comp_anno_2',
+      label = 'Select the annotation to compare against!',
+      choices = annotation_options,
+      multiple = FALSE)  })
 
 
-#   sankey_comp <- eventReactive(input$compare_annos, {
-#     req(input$comp_anno_1, input$comp_anno_2)
+  ## Function to create data table for sankey diagram
+  sankey_comp <- eventReactive(input$compare_annos, {
+    req(input$comp_anno_1, input$comp_anno_2)
 
-#     annos_to_compare <- loom_data()[[input$assay_1]]$get.attribute.df(
-#       attributes=c(
-#         "CellID",
-#         paste(input$comp_anno_1,"_meta_data",sep=""),
-#         paste(input$comp_anno_2,"_meta_data",sep=""))
-#       )
+    annos_to_compare <- rvalues$h5ad[[1]]$obs[c(input$comp_anno_1, input$comp_anno_2)]
 
-#     colnames(annos_to_compare) <- gsub("_meta_data","",colnames(annos_to_compare))
-    
-#     annos_to_compare_stats <- annos_to_compare %>% 
-#     group_by(get(input$comp_anno_1),get(input$comp_anno_2)) %>%
-#     tally() %>%
-#     ungroup()
-    
-#     colnames(annos_to_compare_stats) <- c("anno1","anno2","n")
-    
-#     annos_to_compare_stats <- annos_to_compare_stats %>%
-#     mutate("anno1" = paste(anno1,input$comp_anno_1,sep="_")) %>%
-#     mutate("anno2" = paste(anno2,input$comp_anno_2,sep="_"))
-    
-#     joined_annos <- c(annos_to_compare_stats$anno1,annos_to_compare_stats$anno2)
-#     joined_annos <- unique(joined_annos)
-    
-#     annos_to_compare_stats$IDsource=match(annos_to_compare_stats$anno1, joined_annos)-1 
-#     annos_to_compare_stats$IDtarget=match(annos_to_compare_stats$anno2, joined_annos)-1
+    annos_to_compare_stats <- annos_to_compare %>%
+      group_by(get(input$comp_anno_1),get(input$comp_anno_2)) %>%
+      tally() %>%
+      ungroup()
 
-#     return(annos_to_compare_stats)
-#     })
-  
+    colnames(annos_to_compare_stats) <- c("anno1","anno2","n")
 
-#   #### Compare annotations elements
-#   ## Sankey diagram to compare two annotations
-#   output$sankey_diagram <- renderPlotly({
-#     req(sankey_comp())
-    
-#     joined_annos <- c(sankey_comp()$anno1,sankey_comp()$anno2)
-#     joined_annos <- unique(joined_annos)
-    
-#     p <- plot_ly(
-#       type = "sankey",
-#       orientation = "h",
-      
-#       node = list(
-#         label = joined_annos,
-#         pad = 15,
-#         thickness = 20,
-#         line = list(
-#           color = "black",
-#           width = 0.5
-#           )
-#         ),
-      
-#       link = list(
-#         source = sankey_comp()$IDsource,
-#         target = sankey_comp()$IDtarget,
-#         value =  sankey_comp()$n
-#         )
-#       )
+    annos_to_compare_stats <- annos_to_compare_stats %>%
+    mutate("anno1" = paste(anno1,input$comp_anno_1,sep="_")) %>%
+    mutate("anno2" = paste(anno2,input$comp_anno_2,sep="_"))
 
-#     }) # sankey_diagram end
-  
+    joined_annos <- c(annos_to_compare_stats$anno1,annos_to_compare_stats$anno2)
+    joined_annos <- unique(joined_annos)
+
+    annos_to_compare_stats$IDsource=match(annos_to_compare_stats$anno1, joined_annos)-1
+    annos_to_compare_stats$IDtarget=match(annos_to_compare_stats$anno2, joined_annos)-1
+
+    return(annos_to_compare_stats)
+    })
+
+
+  #### Compare annotations elements
+  ## Sankey diagram to compare two annotations
+  output$sankey_diagram <- renderPlotly({
+    req(sankey_comp())
+
+    joined_annos <- c(sankey_comp()$anno1,sankey_comp()$anno2)
+    joined_annos <- unique(joined_annos)
+
+    p <- plot_ly(
+      type = "sankey",
+      orientation = "h",
+
+      node = list(
+        label = joined_annos,
+        pad = 15,
+        thickness = 20,
+        line = list(
+          color = "black",
+          width = 0.5
+          )
+        ),
+
+      link = list(
+        source = sankey_comp()$IDsource,
+        target = sankey_comp()$IDtarget,
+        value =  sankey_comp()$n
+        )
+      )
+
+    }) # sankey_diagram end
+
 #   #### SciBet #### 
   
 #   ## DataTable with SciBet reference information
