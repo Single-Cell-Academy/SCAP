@@ -34,8 +34,6 @@ ui <- navbarPage(
   theme = shinytheme('cosmo'),
   title = "Single Cell Analysis Portal",
   
-  
-  
   tabPanel(
     "Main",
     value = 'main',
@@ -66,7 +64,7 @@ ui <- navbarPage(
                 style = 'width: 50%; text-align: left;',
                 div(
                   class = 'from-group shiny-input-container',
-                  shinyDirButton("directory", "Select Dataset", "Please select a Dataset")
+                  shinyFilesButton("h5ad_in", "Select an H5ad Dataset", "Please select an H5ad Dataset", multiple = FALSE)
                   )
                 )
               )
@@ -99,29 +97,34 @@ ui <- navbarPage(
         width = 6,
         wellPanel(
           style  = 'background:white;',
-          plotlyOutput('dimplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-          uiOutput('reduction_1', style = 'padding: 10px')
+          fluidRow(
+            plotlyOutput('dimplot_1', height = '400px') %>% withSpinner(color="black", proxy.height = '400px')
+          ),
+          fluidRow(
+            uiOutput('reduction_1', style = 'padding: 10px')
           )
-        ),
+        )
+      ),
       column(
         width = 6,
         wellPanel(
           style  = 'background:white;',
-          conditionalPanel(condition = "input.nebulosa_on == 'no'", 
-                           plotlyOutput('featureplot_1', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-                           uiOutput('featureplot_1_feature.select', style = 'padding: 10px'),
+          fluidRow(
+            plotlyOutput('featureplot_1', height = '400px') %>% withSpinner(color="black", proxy.height = '400px')
           ),
-
-          conditionalPanel(condition = "input.nebulosa_on == 'yes'", 
-                           plotOutput('featureplot_1_nebulosa', height = '120%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-                           uiOutput('featureplot_1_features_nebulosa.select', style = 'padding: 10px')
-          ),
-
-          uiOutput('featureplot_1_nebulosa_on', style = 'padding: 10px')
+          fluidRow(
+            column(width = 3,
+              br(),
+              radioButtons('nebulosa_on', label = 'Nebulosa plot', choices = c('yes', 'no'), selected = 'no', inline = TRUE)
+            ),
+            column(width = 9,
+              uiOutput('featureplot_1_feature_select', style = 'padding: 10px')
+            )
           )
-        ),
-      div(style = "height:10px;")
+        )
       ),
+      div(style = "height:10px;")
+    ),
     fluidRow(
       column(
         align = 'center',
@@ -160,59 +163,66 @@ ui <- navbarPage(
     conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
     conditionalPanel(
       condition = 'input.assay_1',
-      sidebarPanel(
-        uiOutput('assay_2'), ###! replace by assay_1
-        tabsetPanel(
-          id = 'annot_panel',
-          tabPanel(
-            value = 'cell_annotation_cluster',
-            "Annotate Clusters",
-            uiOutput('grouping_2'),
-            h2(textOutput('annotation_title')),
-            uiOutput('annotations')
-            ),
-          tabPanel(
-            value = 'cell_annotation_custom',
-            "Custom Annotations",
-            h2('Select groups of cells from either scatter plot and annotate them'),
-            h3('Name selected cells'),
-            fluidRow(
-              column(
-                width = 9,
-                textInput('custom_name',label = NULL, placeholder = "Enter cluster name here...")
-                ),
-              column(
-                width = 3,
-                actionButton("add_to_tmp", "Add Annotation", style='padding:4px; font-size:80%')
+      fluidRow(
+        sidebarPanel(
+          style = "overflow-y:scroll; max-height: 545px; min-height: 545px; background: white;",
+          uiOutput('assay_2'), ###! replace by assay_1
+          tabsetPanel(
+            id = 'annot_panel',
+            tabPanel(
+              value = 'cell_annotation_cluster',
+              "Annotate Clusters",
+              uiOutput('grouping_2'),
+              h2(textOutput('annotation_title')),
+              uiOutput('annotations'),
+              tags$head(tags$style("#annotations{overflow-y:scroll; max-height: 200px; background: white; border-color: black;}"))
+              ),
+            tabPanel(
+              value = 'cell_annotation_custom',
+              "Custom Annotations",
+              h3('Select groups of cells from either scatter plot and annotate them'),
+              h3('Name selected cells'),
+              fluidRow(
+                column(
+                  width = 9,
+                  textInput('custom_name',label = NULL, placeholder = "Enter cluster name here...")
+                  ),
+                column(
+                  width = 3,
+                  actionButton("add_to_tmp", "Add Annotation", style='padding:4px; font-size:80%')
+                  )
                 )
               )
-            )
+            ),
+            br(),
+            textInput('new_scheme_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
+            actionButton("set_cell_types", "Rename Clusters/Cells"),
+            h4("Selected Cells"),
+            tableOutput('selected_cells'),
+            tags$head(tags$style("#selected_cells{overflow-y:scroll; max-height: 200px; background: white;}"))
           ),
-        textInput('new_scheme_name', 'Name your annotation scheme', placeholder = "Enter scheme name here..."),
-        actionButton("set_cell_types", "Rename Clusters/Cells"),
-        h4("Selected Cells"),
-        tableOutput('selected_cells'),
-        tags$head(tags$style("#selected_cells{overflow-y:scroll; max-height: 200px; background: white;}"))
-        ),
-      mainPanel(
-        fluidRow(
-          column(
-            width = 6,
-            wellPanel(
-              style  = 'background: white;padding: 20px',
-              plotlyOutput('dimplot_2', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-              uiOutput('reduction_2',style = 'padding:10px')
+        mainPanel(
+          fluidRow(
+            column(
+              width = 6,
+              wellPanel(
+                style  = 'background: white;padding: 20px',
+                plotlyOutput('dimplot_2', height = '400px') %>% withSpinner(color="black", proxy.height = '400px'),
+                uiOutput('reduction_2',style = 'padding:10px')
               )
             ),
-          column(
-            width = 6,
-            wellPanel(
-              style  = 'background: white;',
-              plotlyOutput('featureplot_2', height = '90%', width = '100%') %>% withSpinner(color="black", proxy.height = '400px'),
-              uiOutput('featureplot_2_feature_select',style = 'padding:10px')
+            column(
+              width = 6,
+              wellPanel(
+                style  = 'background: white;',
+                plotlyOutput('featureplot_2', height = '400px') %>% withSpinner(color="black", proxy.height = '400px'),
+                uiOutput('featureplot_2_feature_select',style = 'padding:10px')
               )
             )
-          ),
+          )
+        )
+      ),
+      fluidRow(
         wellPanel(
           style  = 'background: white;',
           fluidRow(
@@ -307,6 +317,7 @@ ui <- navbarPage(
       )
     ),
   
+  #### Scibet panel
   tabPanel("SciBet",
             conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
             conditionalPanel(
@@ -330,7 +341,7 @@ ui <- navbarPage(
                            h1("Explanation"),
                            p("You can use this Panel to predict cell types in your data from published, annotated Datasets using SciBet. See the table below,
                              for more information on available references:"),
-                           tags$a(href="https://www.nature.com/articles/s41467-020-15523-2", "SciBet Manuscript!"),
+                           tags$a(href="https://www.nature.com/articles/s41467-020-15523-2",target = "blank", "SciBet Manuscript!"),
                            
                            
                            h2("References available"),
@@ -345,52 +356,9 @@ ui <- navbarPage(
                            )
             )
            ),
-  
-  # ### scPred panel, temporarily disabled
-  # tabPanel("scPred",
-  #  conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
-  #  conditionalPanel(
-  #    condition = 'input.assay_1',
-  #    sidebarPanel(
-  #      h3("Project your cells unto a dataset:",align="left"),
-  #      selectInput(inputId="scpred_species", label="Choose a species!",
-  #        choices=c("Mouse","Human"),
-  #        selected="Mouse", multiple=FALSE, selectize=FALSE),
-  # 
-  #      uiOutput("scpred_data_list"),
-  #      sliderInput("pred_threshold", label = "Choose your prediction threshold:",
-  #        0, 1,
-  #        value = 0.9, step = 0.01),
-  #      uiOutput("predict_cells_button")
-  #      ),
-  # 
-  #            # Show a plot of the generated distribution
-  #            mainPanel(
-  # 
-  #              # # Info box containing information about the selected dataset
-  #              h1("Explanation"),
-  #              p("You can use this Panel to predict cell types in your data from published, annotated Datasets.
-  #                We have prepared several public datasets from different species (Human, Mouse),
-  #                technologies (SMART-seq2,10x) and Organs for you to use. Simply select the type of dataset you
-  #                want to use as a reference in the sidebar on the left. To predict cell types, we are using scPred,
-  #                a recently published algorithm that uses scalable vector machines to predict cell types against a pretrained dataset
-  #                To learn more about scPred, click this link:"),
-  #              tags$a(href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1862-5", "scPred Manuscript!"),
-  #              h1("Results"),
-  # 
-  #              h2("Save predictions:"),
-  #              br(),
-  #              uiOutput("add_predictions_button"),
-  #              br(),
-  #              h2("Score distributions for predictions:"),
-  #              plotOutput("predictions_scores"),
-  #              br(),
-  #              h2("Distribution of predicted cell types:"),
-  #              plotOutput("predictions_plot")
-  #              )
-  #            )
-  #          ), # end of tabPanel
 
+  
+  #### Compare annotations
   tabPanel("Compare annotations",
     conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
     conditionalPanel(
@@ -489,7 +457,7 @@ ui <- navbarPage(
               shinyFilesButton(id = "in_file_to_h5ad", label = "Choose File to Convert", title = "Choose File to Convert", multiple = F, style = "width:100%"),
               textInput('out_file_to_h5ad', label = 'File name for h5ad Output', value = NA, placeholder = "Save h5ad File As"),
               shinyDirButton(id = "out_dir_to_h5ad", label = "Select where to save h5ad file", title = "Select where to save h5ad file", style = "width:100%"),
-              radioButtons('is_legacy', label = "Legacy Conversion?", choices = c("yes", "no"), inline = T),
+              radioButtons('is_legacy', label = "Legacy Conversion?", choices = c("yes", "no"), selected = "no", inline = T),
               conditionalPanel(
                 condition = "input.is_legacy=='yes'",
                 shinyFilesButton(id = "legacy_file_to_h5ad", label = "Choose Original Seurat Object", title = "Choose Original Seurat Object for Legacy Conversion", multiple = F, style = "width:100%")
