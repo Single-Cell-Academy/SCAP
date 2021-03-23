@@ -86,9 +86,7 @@ server <- function(input, output, session){
     rvalues$features <- rownames(data[[1]]$var)
     rvalues$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
-    obs_cat <- check_if_obs_cat(obs_names = data[[1]]$obs_keys(),
-                     obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
-    rvalues$obs_cat <- obs_cat
+    rvalues$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
     reductions <- data[[1]]$obsm$as_dict()
     reduction_keys <- data[[1]]$obsm_keys()
     r_names <- rownames(data[[1]]$obs)
@@ -232,11 +230,23 @@ server <- function(input, output, session){
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     names(group.by) <- input$grouping_1
     names(group.by[[1]]) <- rvalues$cell_ids
-    dimPlotlyOutput(assay.in = input$assay_1, 
+    cat <- rvalues$obs_cat[which(rvalues$obs == input$grouping_1)]
+    if(cat){
+      dimPlotlyOutput(assay.in = input$assay_1, 
                     reduc.in = rvalues$reductions[[input$reduction_1]], 
                     group.by = group.by, 
                     annot_panel = "", 
                     low.res = 'yes')
+    }else{
+      feature.in <- rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=FALSE]
+      colnames(feature.in) <- input$grouping_1
+      rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
+      featurePlotlyOutput(assay.in = input$assay_1,
+                          reduc.in = rvalues$reductions[[input$reduction_1]],
+                          group.by = group.by,
+                          feature.in = feature.in,
+                          low.res = 'yes')
+    }
   })
   
   #-- dimensional reduction plot coloured by feature expression --#
@@ -357,14 +367,15 @@ server <- function(input, output, session){
   output$grouping_2 <- renderUI({
     req(input$assay_2, rvalues$obs)
     assay <- input$assay_2
-    if(any(grepl("seurat_clusters", rvalues$obs, ignore.case = FALSE))){
-      sel <- rvalues$obs[grep("seurat_clusters", rvalues$obs)]
-    }else if(any(grepl(paste0(tolower(assay),"_clusters"), rvalues$obs, ignore.case = TRUE))){
+    options <- rvalues$obs[which(rvalues$obs_cat)] # only show categorical metadata
+    if(any(grepl("seurat_clusters", options, ignore.case = FALSE))){
+      sel <- rvalues$obs[grep("seurat_clusters", options)]
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"), options, ignore.case = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
     }else{
-      sel <- rvalues$obs[1]
+      sel <- options[1]
     }
-    selectInput(inputId = 'grouping_2', label = 'Group By', choices = rvalues$obs, selected = sel, multiple = FALSE)
+    selectInput(inputId = 'grouping_2', label = 'Group By', choices = options, selected = sel, multiple = FALSE)
   })
   
   #-- select the clustering method --#
@@ -538,6 +549,7 @@ server <- function(input, output, session){
         rvalues$h5ad[[i]]$obs[input$new_scheme_name] <- new
       }
       rvalues$obs <- rvalues$h5ad[[1]]$obs_keys()
+      rvalues$obs_cat <- check_if_obs_cat(rvalues$h5ad[[1]]$obs)
       showNotification("Saving...", duration = NULL, id = 'save_annot')
           for(i in 1:length(rvalues$path_to_data)){
             rvalues$h5ad[[i]]$write(filename = rvalues$path_to_data[i])
@@ -1078,9 +1090,7 @@ server <- function(input, output, session){
     
     rvalues$h5ad[[1]]$obs[pred_params_name] <- new_meta_group_list
     rvalues$obs <- rvalues$h5ad[[1]]$obs_keys()
-    obs_cat <- check_if_obs_cat(obs_names = rvalues$h5ad[[1]]$obs_keys(),
-                                obs_df = rvalues$h5ad[[1]]$obs) ## Function to check if an observation is categorical or numeric
-    rvalues$obs_cat <- obs_cat
+    rvalues$obs_cat <- check_if_obs_cat(rvalues$h5ad[[1]]$obs)
     rvalues$h5ad[[1]]$write(filename = rvalues$path_to_data[1])
     
     Sys.sleep(1)
