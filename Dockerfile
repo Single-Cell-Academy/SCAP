@@ -31,7 +31,7 @@ RUN apt-get install -y git && \
     pip3 install -U pip
 
 # clone SCAP repo
-RUN git clone https://github.com/Single-Cell-Academy/SCAP.git
+RUN git clone --branch Docker https://github.com/Single-Cell-Academy/SCAP.git
 
 WORKDIR "/SCAP"
 
