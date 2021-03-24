@@ -1,25 +1,3 @@
-#' Functions For Shiny App 
-#' 
-#' @import cowplot
-#' @import dplyr
-#' @import ggplot2
-#' @import ggthemes
-#' @import gtools
-#' @import hdf5r
-#' @import loomR
-#' @import Matrix
-#' @import MODIS
-#' @import plotly
-#' @import presto
-#' @import Seurat
-#' @import shiny
-#' @import shinycssloaders
-#' @import shinyFiles
-#' @import shinyjqui
-#' @import shinythemes
-
-#my.pal <- c(RColorBrewer::brewer.pal(12,'Set3'),RColorBrewer::brewer.pal(12,'Paired'))
-
 library("shiny")
 library("shinycssloaders")
 library("shinyFiles")
@@ -46,6 +24,25 @@ library("SeuratDisk")
 library("reticulate")
 
 palette <- colorRampPalette(c("lightgrey", viridis(10)))
+
+check_if_obs_cat <- function(obs_names,
+                             obs_df){
+  obs_cat <- c()
+  for(obs in obs_names){
+    annotation <- obs_df[obs][,,drop=TRUE]
+    if(is.numeric(annotation)){ ## Check if the annotation is numeric
+      uniq_groups <- length(unique(annotation))
+      if(uniq_groups <= 50){
+        category <- obs # categorical
+        obs_cat <- c(obs_cat,category)
+      }
+    }else{
+      category <- obs
+      obs_cat <- c(obs_cat,category)
+    }
+  }
+  return(obs_cat)
+}
 
 save_figure <- function(file_type, file_name, units, height, width, resolution, to_plot){
   if(file_type == "png"){
@@ -356,11 +353,8 @@ detect_legacy_scap <- function(loom){
   }
 }
 
-scap_to_h5ad <- function(in_file, out_dir, out_file, old_file){
-  if(grepl("\\.h5ad$", out_file) == FALSE){
-    out_file <- paste0(out_file, ".h5ad")
-  }
-  out_path <- file.path(out_dir, out_file)
+scap_to_h5ad <- function(in_file, out_path, old_file, modality = "RNA"){
+  anndata <- import('anndata')
   if(grepl("\\.rds$", in_file, ignore.case = TRUE)){
     obj <- readRDS(in_file)
   }else if(grepl("\\.loom$", in_file, ignore.case = TRUE)){
@@ -370,8 +364,10 @@ scap_to_h5ad <- function(in_file, out_dir, out_file, old_file){
   }
   if(identical(class(obj)[1], "Seurat")){
     obj <- UpdateSeuratObject(obj)
+    message("Converting to H5Seurat")
     SaveH5Seurat(obj, filename = sub("\\.h5ad$", ".h5Seurat", out_path))
-    Convert(sub("\\.h5ad$", ".h5Seurat", out_path), dest = "h5ad")
+    message("Converting to H5ad")
+    Convert(sub("\\.h5ad$", ".h5Seurat", out_path), dest = "h5ad", assay = modality)
   }else if(identical(class(obj)[1], "loom")){
     legacy <- detect_legacy_scap(list(obj))
     if(legacy){
@@ -385,21 +381,30 @@ scap_to_h5ad <- function(in_file, out_dir, out_file, old_file){
             return(-2)
           }else{
             seur <- UpdateSeuratObject(seur)
+            message("Converting to H5Seurat")
             SaveH5Seurat(seur, filename = sub("\\.h5ad$", ".h5Seurat", out_path))
-            Convert(sub("\\.h5ad$", ".h5Seurat", out_path), dest = "h5ad")
+            message("Converting to H5ad")
+            Convert(sub("\\.h5ad$", ".h5Seurat", out_path), dest = "h5ad", assay = modality)
           }
         }else{
           return(-3)
         }
       }
     }else{
-      anndata <- import('anndata')
-      ad <- anndata$read_loom(file)
-      ad$write()
+      lf <- anndata$read_loom(file)
+      lf$write(out_path)
     }
   }else{
     return(-4)
   }
+  #------ required to fix anndata.write ValueError: '_index' is a reserved name for dataframe columns. Above error raised while writing key 'raw/var' of <class 'h5py._hl.files.File'> from /. ------#
+  cat(file = stderr(), "raw/var correction...\n")
+  a = anndata$read(out_path)
+  py$tmp = a
+  py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].rename(columns={'_index': 'features'})")
+  a = py$tmp
+  a$write(out_path)
+  #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------#
   return(1)
 }
 
@@ -466,9 +471,9 @@ percentAbove <- function(x, threshold){
 
 ######### dotPlot ############
 dotPlot <- function(
-  data,
+  data.features = NULL,
   assay = NULL,
-  features,
+  features = NULL,
   cols = c("blue", "red"),
   col.min = -2.5,
   col.max = 2.5,
@@ -481,49 +486,20 @@ dotPlot <- function(
   scale.max = NA,
   ...
 ) {
-  group.by <- paste0(group.by,'_meta_data')
-  if(!any(names(data$col.attrs) == group.by)){
-    return(NULL)
-  }
   scale.func <- switch(
     EXPR = scale.by,
     'size' = scale_size,
     'radius' = scale_radius,
     stop("'scale.by' must be either 'size' or 'radius'")
   )
-  if(!any(names(data$col.attrs) == group.by) | !any(features%in%data$row.attrs$features[])){
-    return(NULL)
-  }
-  index <- unlist(lapply(features, function(x){
-    grep(x, data$row.attrs$features[], fixed=T)[1]
-    }))
-  data.features <- as.data.frame(data[['matrix']][,index])
-  if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
-  rownames(data.features) <- data$col.attrs$CellID[]
-  colnames(data.features) <- features
-  id <- data[[paste0("col_attrs/",group.by)]][drop=TRUE]
-  if(length(unique(id))>50){
-    showNotification(paste0('Notice: The dot plot will not load because the chosen grouping contains over 50 (',length(unique(id)),') unique groups.'), type = 'message')
-    return(NULL)
-  }
-  data.features$id <- id
   
+  if(is.null(features)) return(NULL)
+
   if (!is.factor(x = data.features$id)) {
     data.features$id <- factor(x = data.features$id)
   }
   id.levels <- levels(x = data.features$id)
   data.features$id <- as.vector(x = data.features$id)
-  if (!is.null(x = split.by)) {
-    splits <- data[[paste0("col_attrs/",split.by)]][drop=TRUE]
-    if (length(x = unique(x = splits)) > length(x = cols)) {
-      stop("Not enought colors for the number of groups")
-    }
-    cols <- cols[1:length(x = unique(x = splits))]
-    names(x = cols) <- unique(x = splits)
-    data.features$id <- paste(data.features$id, splits, sep = '_')
-    unique.splits <- unique(x = splits)
-    id.levels <- paste0(rep(x = id.levels, each = length(x = unique.splits)), "_", rep(x = unique(x = splits), times = length(x = id.levels)))
-  }
   data.plot <- lapply(
     X = unique(x = data.features$id),
     FUN = function(ident) {
@@ -563,9 +539,6 @@ dotPlot <- function(
     }
   )
   avg.exp.scaled <- as.vector(x = t(x = avg.exp.scaled))
-  if (!is.null(x = split.by)) {
-    avg.exp.scaled <- as.numeric(x = cut(x = avg.exp.scaled, breaks = 20))
-  }
   data.plot$avg.exp.scaled <- avg.exp.scaled
   data.plot$features.plot <- factor(
     x = data.plot$features.plot,
@@ -573,21 +546,6 @@ dotPlot <- function(
   )
   data.plot$pct.exp[data.plot$pct.exp < dot.min] <- NA
   data.plot$pct.exp <- data.plot$pct.exp * 100
-  if (!is.null(x = split.by)) {
-    splits.use <- vapply(
-      X = strsplit(x = as.character(x = data.plot$id), split = '_'),
-      FUN = '[[',
-      FUN.VALUE = character(length = 1L),
-      2
-    )
-    data.plot$colors <- mapply(
-      FUN = function(color, value) {
-        return(colorRampPalette(colors = c('grey', color))(20)[value])
-      },
-      color = cols[splits.use],
-      value = avg.exp.scaled
-    )
-  }
   color.by <- ifelse(test = is.null(x = split.by), yes = 'avg.exp.scaled', no = 'colors')
   if (!is.na(x = scale.min)) {
     data.plot[data.plot$pct.exp < scale.min, 'pct.exp'] <- scale.min
@@ -616,107 +574,71 @@ dotPlot <- function(
   )
   
   data.plot$id <- reorder_levels(data.plot$id)
-  
-  plot <- ggplot(data = data.plot, mapping = aes(x = data.plot$features.plot, y = data.plot$id)) +
+  plot <- ggplot(data = data.plot, mapping = aes(x = features.plot, y = id)) +
     geom_point(mapping = aes_string(size = 'pct.exp', color = color.by)) +
     #scale.func(range = c(0, dot.scale), limits = c(scale.min, scale.max)) +
     theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
     guides(size = guide_legend(title = 'Percent Expressed')) +
     labs(
       x = 'Features',
-      y = ifelse(test = is.null(x = split.by), yes = 'Identity', no = 'Split Identity')
+      y = 'Identity'
     )
-  if (!is.null(x = split.by)) {
-    plot <- plot + scale_color_identity()
-  } else if (length(x = cols) == 1) {
+  if (length(x = cols) == 1) {
     plot <- plot + scale_color_distiller(palette = cols)
   } else {
     plot <- plot + scale_color_gradient(low = cols[1], high = cols[2])
   }
-  if (is.null(x = split.by)) {
-    plot <- plot + guides(color = guide_colorbar(title = 'Average Expression'))
-  }
+
+  plot <- plot + guides(color = guide_colorbar(title = 'Average Expression'))
+  
   return(plot)
 }
 
 ######## dimPlotlyOutput #######
-dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tmp_annotations = NULL, low.res, data){
-  #t1 <- Sys.time()
-  col.attrs <- names(data[[assay.in]]$col.attrs)
+dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tmp_annotations = NULL, low.res){
 
-  group.by <- paste0(group.by,'_meta_data')
-  # if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
-  #   return(NULL)
-  # }
-  if(!any(col.attrs == group.by)){
-    return(NULL)
-  }
-  reduc <- col.attrs[grepl(reduc.in,col.attrs)]
-  n <- length(reduc)
-  
+  n <- length(colnames(reduc.in))
   if(n<2 || n>3){
-    showNotification(ui = paste0('Error: Invalid number of dimensions for ', reduc.in, ': ',n),type = 'error')
+    showNotification(ui = paste0('Error: Invalid number of dimensions for selected reduction: ',n),type = 'error')
   }
-  #t2 <- Sys.time()
-  plot.data <- data[[assay.in]]$get.attribute.df(attributes=c(reduc,group.by,'percent.mito_meta_data'))
-  #print(paste("dimplot plot.data:", Sys.time()-t2))
-  ann <- 50
-  if(length(unique(plot.data[,ncol(plot.data)-1]))>ann){
-    if (is.numeric(plot.data[,ncol(plot.data)-1])){
-      showNotification(ui = paste0('Warning: The annotations you chose contain over ', ann, ' unique numeric annotations and may not be suitable for vizualization'),type = 'warning')
-    }else{
-      # Maybe check for this in the shiny server to not give the user the option to even select this... 
-      showNotification(ui = paste0('Error: The annotations you chose contain over ', ann, ' unique non-numeric annotations and are not suitable for vizualization'),type = 'error')
-      return(NULL)
-    }
-  }
-  label_key <- reduc_key(key = toupper(sub("_.*","",reduc.in)))
-  
-  # Set fixed limits so plot doesn't resize when subsetting in plotly. 
-  # Enlarge limits a bit so cells don't fall on the axis lines
-  xrange <- as.numeric(max(plot.data[,1])) - as.numeric(min(plot.data[,1]))
-  yrange <- as.numeric(max(plot.data[,2])) - as.numeric(min(plot.data[,2]))
-  zrange <- as.numeric(max(plot.data[,3])) - as.numeric(min(plot.data[,3]))
-  xlimits <- c((as.numeric(min(plot.data[,1])) - xrange * 0.15),
-               (as.numeric(max(plot.data[,1])) + xrange * 0.15))
-  ylimits <- c((as.numeric(min(plot.data[,2])) - yrange * 0.15),
-               (as.numeric(max(plot.data[,2])) + yrange * 0.15))
-  zlimits <- c((as.numeric(min(plot.data[,3])) - zrange * 0.15),
-               (as.numeric(max(plot.data[,3])) + zrange * 0.15))
+
+  group.by[[1]] <- reorder_levels(group.by[[1]])
+
+  plot.data <- cbind(reduc.in, group.by[[1]])
+  colnames(plot.data) <- c(colnames(reduc.in), names(group.by)[1])
+  rownames(plot.data) <- names(group.by[[1]])
+
   ax.x <- list(
-    title = paste0(label_key,"_1"),
+    title = colnames(reduc.in)[1],
     zeroline = FALSE,
     showline = TRUE,
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none',
-    range = c(xlimits[1],xlimits[2])
+    ticks='none'#,
+    #range = c(xlimits[1],xlimits[2])
   )
   ax.y <- list(
-    title = paste0(label_key,"_2"),
+    title = colnames(reduc.in)[2],
     zeroline = FALSE,
     showline = TRUE,
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none',
-    range = c(ylimits[1],ylimits[2])
+    ticks='none'#,
+    #range = c(ylimits[1],ylimits[2])
   )
-  
-  ax.z <- list(
-    title = paste0(label_key,"_3"),
-    zeroline = FALSE,
-    showline = TRUE,
-    showticklabels = FALSE,
-    showgrid = FALSE,
-    mirror=TRUE,
-    ticks='none',
-    range = c(zlimits[1],zlimits[2])
-  )
-
-  if(!any(is.na(as.numeric(plot.data[,ncol(plot.data)-1]))) & length(unique(plot.data[,ncol(plot.data)-1,drop = TRUE]))<50){
-    plot.data[,ncol(plot.data)-1] <- as.factor(as.numeric(plot.data[,ncol(plot.data)-1]))
+  if(length(colnames(reduc.in)) == 3){
+    ax.z <- list(
+      title = colnames(reduc.in)[3],
+      zeroline = FALSE,
+      showline = TRUE,
+      showticklabels = FALSE,
+      showgrid = FALSE,
+      mirror=TRUE,
+      ticks='none'#,
+      #range = c(zlimits[1],zlimits[2])
+    )
   }
   
   col <- if(annot_panel == 'cell_annotation_custom'){
@@ -726,31 +648,28 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   }else{
     plot.data[,4]
   }
-  #t4 <- Sys.time()
+
   if(n == 2){
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], 
                  type = 'scatter', mode = 'markers', key = ~rownames(plot.data), alpha = 0.6, stroke = I('dimgrey'),
                  color = col, text =  ~paste0(
-                   sub('_meta_data','',group.by),": ", plot.data[,3],"\n</br>",
-                   label_key,"_1: ", format(plot.data[,1],digits=3),"\n",
-                   "</br>",label_key,"_2: ", format(plot.data[,2],digits=3), "\n",
-                   "</br>percent.mt: ", format(plot.data[,4],digits=3), "%"),
+                   names(group.by)[1],": ", plot.data[,3],"\n</br>",
+                   colnames(reduc.in)[1],": ", format(plot.data[,1],digits=3),"\n",
+                   "</br>",colnames(reduc.in)[2],": ", format(plot.data[,2],digits=3)),
                  hovertemplate = paste0('<b>%{text}</b><extra></extra>')
-    ) %>% layout(title = ifelse(test = annot_panel == 'cell_annotation_custom', yes = paste0(assay.in, " data coloured by custom annotations"), no = paste0(assay.in, " data coloured by ", sub('_meta_data','',group.by))) ,xaxis = ax.x, yaxis = ax.y, dragmode='lasso')
+    ) %>% layout(title = ifelse(test = annot_panel == 'cell_annotation_custom', yes = paste0(assay.in, " data coloured by custom annotations"), no = paste0(assay.in, " data coloured by ", names(group.by))) ,xaxis = ax.x, yaxis = ax.y, dragmode='lasso')
   }else{
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], z = plot.data[,3],
                  type = 'scatter3d', mode = 'markers', key = ~rownames(plot.data), stroke = I('dimgrey'),
                  color = col, text =  ~paste0(
-                   sub('_meta_data','',group.by),": ", plot.data[,4],"\n</br>",
-                   label_key,"_1: ", format(plot.data[,1],digits=3),"\n",
-                   "</br>",label_key,"_2: ", format(plot.data[,2],digits=3), "\n",
-                   "</br>",label_key,"_3: ", format(plot.data[,3],digits=3), "\n",
-                   "</br>percent.mt: ", format(plot.data[,5],digits=3), "%"), 
+                   names(group.by)[1],": ", plot.data[,4],"\n</br>",
+                   colnames(reduc.in)[1],": ", format(plot.data[,1],digits=3),"\n",
+                   "</br>",colnames(reduc.in)[2],": ", format(plot.data[,2],digits=3), "\n",
+                   "</br>",colnames(reduc.in)[3],": ", format(plot.data[,3],digits=3)), 
                  hovertemplate = paste0('<b>%{text}</b><extra></extra>')
-    ) %>% layout(title = ifelse(test = annot_panel == 'cell_annotation_custom', yes = paste0(assay.in, " data coloured by custom annotations"), no = paste0(assay.in, " data coloured by ", sub('_meta_data','',group.by))) ,scene = list(xaxis = ax.x, yaxis = ax.y, zaxis = ax.z, dragmode='lasso'),legend = list(x = 100, y = 0.5))
+    ) %>% layout(title = ifelse(test = annot_panel == 'cell_annotation_custom', yes = paste0(assay.in, " data coloured by custom annotations"), no = paste0(assay.in, " data coloured by ", names(group.by))) ,scene = list(xaxis = ax.x, yaxis = ax.y, zaxis = ax.z, dragmode='lasso'),legend = list(x = 100, y = 0.5))
   }
-  #print(paste("dimplot plot:", Sys.time()-t4))
-  #print(paste("dimplot total:", Sys.time()-t1))
+
   if(low.res == 'yes'){
     return(p %>% toWebGL())
   }else{
@@ -759,83 +678,61 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
 }
 
 ####### featurePlotlyOutput ##########
-featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.res, data){
-  #t1 <- Sys.time()
-  group.by <- paste0(group.by,'_meta_data')
-  # if(!grepl(paste0('_',tolower(assay.in),'_'),reduc.in)){
-  #   return(NULL)
-  # }
-  if(!any(names(data[[assay.in]]$col.attrs) == group.by)){
-    return(NULL)
+featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.res){
+  
+  n <- length(colnames(reduc.in))
+  if(n<2 || n>3){
+    showNotification(ui = paste0('Error: Invalid number of dimensions for selected reduction: ',n),type = 'error')
   }
-  #t2 <- Sys.time()
-  data.features <- as.data.frame(data[[assay.in]][['matrix']][,which(data[[assay.in]]$row.attrs$features[]%in%feature.in)])
-  #print(paste("featureplot data.features:", Sys.time()-t2))
-  if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
-  
-  data.annot <- data[[assay.in]]$get.attribute.df(attributes=group.by)
-  
-  rownames(data.features) <- data[[assay.in]]$col.attrs$CellID[]
-  colnames(data.features) <- feature.in
-  
-  dims <- names(data[[assay.in]]$col.attrs)[grepl(reduc.in,names(data[[assay.in]]$col.attrs))]
-  
-  #t3 <- Sys.time()
-  plot.data <- data[[assay.in]]$get.attribute.df(attributes=dims)
-  plot.data <- cbind(plot.data,data.annot)
-  plot.data <- cbind(plot.data,data.features)
-  #print(paste("featureplot cbinds:", Sys.time()-t3))
-  
-  label_key <- reduc_key(key = toupper(sub("_.*","",reduc.in)))
-  
-  xrange <- as.numeric(max(plot.data[,1])) - as.numeric(min(plot.data[,1]))
-  yrange <- as.numeric(max(plot.data[,2])) - as.numeric(min(plot.data[,2]))
-  zrange <- as.numeric(max(plot.data[,3])) - as.numeric(min(plot.data[,3]))
-  xlimits <- c((as.numeric(min(plot.data[,1])) - xrange * 0.15),
-               (as.numeric(max(plot.data[,1])) + xrange * 0.15))
-  ylimits <- c((as.numeric(min(plot.data[,2])) - yrange * 0.15),
-               (as.numeric(max(plot.data[,2])) + yrange * 0.15))
-  zlimits <- c((as.numeric(min(plot.data[,3])) - zrange * 0.15),
-               (as.numeric(max(plot.data[,3])) + zrange * 0.15))
+
+  if(ncol(feature.in)==0) return(NULL)
+    
+  group.by[[1]] <- reorder_levels(group.by[[1]])
+
+  plot.data <- do.call(cbind, list(reduc.in, group.by, feature.in))
+  rownames(plot.data) <- names(group.by[[1]])
+
   ax.x <- list(
-    title = paste0(label_key,"_1"),
+    title = colnames(reduc.in)[1],
     zeroline = FALSE,
     showline = TRUE,
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none',
-    range = c(xlimits[1],xlimits[2])
+    ticks='none'#,
+    #range = c(xlimits[1],xlimits[2])
   )
   ax.y <- list(
-    title = paste0(label_key,"_2"),
+    title = colnames(reduc.in)[2],
     zeroline = FALSE,
     showline = TRUE,
     showticklabels = FALSE,
     showgrid = FALSE,
     mirror=TRUE,
-    ticks='none',
-    range = c(ylimits[1],ylimits[2])
+    ticks='none'#,
+    #range = c(ylimits[1],ylimits[2])
   )
-  ax.z <- list(
-    title = paste0(label_key,"_3"),
-    zeroline = FALSE,
-    showline = TRUE,
-    showticklabels = FALSE,
-    showgrid = FALSE,
-    mirror=TRUE,
-    ticks='none',
-    range = c(zlimits[1],zlimits[2])
-  )
-  #t4 <- Sys.time()
-  if(length(dims) == 2){
+  if(length(colnames(reduc.in)) == 3){
+    ax.z <- list(
+      title = colnames(reduc.in)[3],
+      zeroline = FALSE,
+      showline = TRUE,
+      showticklabels = FALSE,
+      showgrid = FALSE,
+      mirror=TRUE,
+      ticks='none'#,
+      #range = c(zlimits[1],zlimits[2])
+    )
+  } 
+
+  if(n == 2){
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2],
                  type = 'scatter', mode = 'markers', key = ~rownames(plot.data),
                  color = plot.data[,4], colors = palette(100), opacity = 0.6, text =  ~paste0(
-                   sub("_meta_data","",group.by),": ", plot.data[,3],"\n",
+                   names(group.by)[1],": ", plot.data[,3],"\n",
                    "</br>",'Expression',": ", format(plot.data[,4],digits=3),"\n",
-                   "</br>",label_key,"_1: ", format(plot.data[,1],digits=3),"\n",
-                   "</br>",label_key,"_2: ", format(plot.data[,2],digits=3), "\n"), 
+                   "</br>",colnames(reduc.in)[1],"_1: ", format(plot.data[,1],digits=3),"\n",
+                   "</br>",colnames(reduc.in)[2],"_2: ", format(plot.data[,2],digits=3), "\n"), 
                  marker = list(size = 5),
                  hovertemplate = paste0('<b>%{text}</b>',
                                         '<extra></extra>')
@@ -844,11 +741,11 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], z = plot.data[,3],
                  type = 'scatter3d', mode = 'markers', key = ~rownames(plot.data),
                  color = plot.data[,5], colors = palette(100), opacity = 0.6, text =  ~paste0(
-                   sub("_meta_data","",group.by),": ", plot.data[,4],"\n",
+                   names(group.by)[1],": ", plot.data[,4],"\n",
                    "</br>",'Expression',": ", format(plot.data[,5],digits=3),"\n",
-                   "</br>",label_key,"_1: ", format(plot.data[,1],digits=3),"\n",
-                   "</br>",label_key,"_2: ", format(plot.data[,2],digits=3), "\n",
-                   "</br>",label_key,"_3: ", format(plot.data[,3],digits=3), "\n"), 
+                   "</br>",colnames(reduc.in)[1],"_1: ", format(plot.data[,1],digits=3),"\n",
+                   "</br>",colnames(reduc.in)[2],"_2: ", format(plot.data[,2],digits=3), "\n",
+                   "</br>",colnames(reduc.in)[3],"_3: ", format(plot.data[,3],digits=3), "\n"), 
                  marker = list(size = 3),
                  hovertemplate = paste0('<b>%{text}</b>',
                                         '<extra></extra>')
@@ -865,68 +762,32 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
 
 #### 
 ## Nebulosa version
-featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, features.in, low.res, data){
-  #t1 <- Sys.time()
-  group.by <- paste0(group.by,'_meta_data')
-  
-  col.attrs <- names(data[[assay.in]]$col.attrs)
-  reduc <- col.attrs[grepl(reduc.in,col.attrs)]
-  label_key <- reduc_key(key = toupper(sub("_.*","",reduc)))
-  
-  if(!any(names(data[[assay.in]]$col.attrs) == group.by)){
-    return(NULL)
-  }
-  
-  data.features <- as.data.frame(data[[assay.in]][['matrix']][,which(data[[assay.in]]$row.attrs$features[]%in%features.in)])
-  if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
-  
-  data.annot <- data[[assay.in]]$get.attribute.df(attributes=group.by)
-  
-  rownames(data.features) <- data[[assay.in]]$col.attrs$CellID[]
-  colnames(data.features) <- features.in
-  
-  dims <- names(data[[assay.in]]$col.attrs)[grepl(reduc.in,names(data[[assay.in]]$col.attrs))]
-  
-  data_seurat <- CreateSeuratObject(counts = t(data.features),
-                                    meta.data = data.annot,
+featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, feature.in, low.res){
+  if(ncol(feature.in) < 1) return(NULL)
+  data.features = as.matrix(t(feature.in))
+  data_seurat <- CreateSeuratObject(counts = data.features,
+                                    meta.data = group.by,
                                     min.cells = 0,
                                     min.features = 0)
   
-  plot.data <- data[[assay.in]]$get.attribute.df(attributes=dims)
-  colnames(plot.data) <- c(paste(label_key," 1",sep =""),paste(label_key," 2",sep =""))
-
-  embedding <- CreateDimReducObject(embeddings = as.matrix(plot.data),
-                                         assay = "RNA",
-                                         key = paste(label_key,"_",sep="")) 
-
-  data_seurat[['umap']] <- embedding
+  data_seurat[['umap']] <- CreateDimReducObject(embeddings = as.matrix(reduc.in),
+                                    assay = "RNA",
+                                    key = unique(sub("_[0-9]$", "", colnames(reduc.in)))) 
   
-  if(length(features.in) == 1){
-    single_nebulosa <- plot_density(data_seurat, 
-                      features = features.in,
-                      size = 2) +
-      theme_cowplot()
-    
-    return(single_nebulosa)
-  }else if(length(features.in) > 1){
-    p <- plot_density(data_seurat, 
-                      features = features.in,
-                      joint = TRUE, combine = FALSE,
-                      size = 2) 
-    
-    multi_nebulosa <- p[[length(p)]] +
-      theme_cowplot()
-    
-    return(multi_nebulosa)
+  if(ncol(feature.in) == 1){
+    return(plot_density(data_seurat, features = colnames(feature.in), size = 2) + theme_cowplot())
+  }else{
+    p <- plot_density(data_seurat, features = colnames(feature.in), joint = TRUE, combine = FALSE, size = 2) 
+    return(p[[length(p)]] + theme_cowplot())
   }
 }
 
 ####
 
-split_dot_plot <- function(data, 
-                           features, 
-                           group.by, 
-                           split.by,
+split_dot_plot <- function(data.features = NULL, 
+                           assay = NULL, 
+                           features = NULL, 
+                           split.by = NULL,
                            col.max = 2.5,
                            col.min = -2.5,
                            cols = c("blue","red"),
@@ -936,33 +797,14 @@ split_dot_plot <- function(data,
                            scale.max = NA,
                            scale.min = NA){
   
-  group.by <- paste0(group.by,'_meta_data')
-  split.by <- paste0(split.by,'_meta_data')
-  index <- unlist(lapply(features, function(x){
-    grep(x, data$row.attrs$features[], fixed=T)[1]
-    }))
-  data.features <- as.data.frame(data[['matrix']][,index])
-  if(nrow(data.features)==0|ncol(data.features)==0) return(NULL)
-  rownames(data.features) <- data$col.attrs$CellID[]
-  colnames(data.features)[1:length(features)] <- features
-  
-  id <- data[[paste0("col_attrs/",group.by)]][drop=TRUE]
-  if(length(unique(id))>50){
-    showNotification(paste0('Notice: The dot plot will not load because the chosen grouping contains over 50 (',length(unique(id)),') unique groups.'), type = 'message')
-    return(NULL)
-  }
-  data.features$id <- id
-  
+  if(is.null(features)) return(NULL)
   if (!is.factor(x = data.features$id)) {
     data.features$id <- factor(x = data.features$id)
   }
   id.levels <- levels(x = data.features$id)
   data.features$id <- as.vector(x = data.features$id)
   if (!is.null(x = split.by)) {
-    splits <- data[[paste0("col_attrs/",split.by)]][drop=TRUE]
-    #if (length(x = unique(x = splits)) > length(x = cols)) {
-    #  stop("Not enought colors for the number of groups")
-    #}
+    splits <- split.by[[1]]
     cols <- cols[1:length(x = unique(x = splits))]
     names(x = cols) <- unique(x = splits)
     data.features$id <- paste(data.features$id, splits, sep = 'SPLITBYTAG')
@@ -1081,7 +923,6 @@ split_dot_plot <- function(data,
       break
     }
   }
-  cat('\n\n')
   return(p)
 }
 
