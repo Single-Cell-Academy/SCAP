@@ -3,9 +3,7 @@ FROM rocker/shiny:3.6.3
 
 # system libraries of general use
 ## install debian packages
-RUN apt-get update -qq && \
-    apt-get upgrade -y && \
-    apt-get -y --no-install-recommends install \
+RUN apt-get update -qq && apt-get -y --no-install-recommends install \
     libxml2-dev \
     libcairo2-dev \
     libsqlite3-dev \
@@ -20,23 +18,23 @@ RUN apt-get update -qq && \
     libudunits2-dev \
     libgdal-dev \
     gcc \
-    libpq-dev -y
+    llvm \
+    git \
+    python3 \
+    python3-dev\
+    python3-pip \
+    python3-venv \
+    python3-wheel
 
-## update system libraries
-RUN apt-get install -y git && \
-    apt-get install python3 -y && \
-    apt-get install python3-pip -y && \
-    apt-get install python3-venv -y && \
-    apt-get install python3-wheel -y && \
-    pip3 install -U pip
-
+RUN pip3 install -U pip && \
+    pip3 install llvmlite==0.31.0
+    
 # clone SCAP repo
 RUN git clone --branch dev https://github.com/Single-Cell-Academy/SCAP.git
 
 WORKDIR "/SCAP"
 
-RUN R -e 'renv::use_python()' && \
-    R -e 'renv::restore()'
+RUN R -e 'renv::restore()'
 
 # expose port
 EXPOSE 3838
