@@ -2,6 +2,11 @@
 
 We have added this News tab to the SCAP app. Come back here to find the newest updates and functions we have implemented into SCAP!
 
+## **2021-03-25 : New data format**
+
+We have completely modified the input format used by SCAP. Instead of using custom loom files, SCAP now uses h5ad formatted files, similar to cellxgene. This means that the data used as input for SCAP can seamlessly be imported into cellxgene as well. We made this decision in an effort for easier compatibility of SCAP analysis with other tools. If you have an existing loom file from previous analysis, you first have to transform this into an h5ad file using the File conversion tab.
+
+
 ## **2020-10-21 : Nebulosa and Scibet added**
 
 We are excited to add two new features to SCAP with this update. 
