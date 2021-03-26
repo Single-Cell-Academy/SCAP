@@ -19,3 +19,4 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
           repository: singlecellacademy/scap:dev
           tag_with_ref: true
+          push: true
