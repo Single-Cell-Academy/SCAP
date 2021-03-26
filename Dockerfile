@@ -1,5 +1,5 @@
 # Base image https://hub.docker.com/u/rocker/
-FROM rocker/shiny:3.6.3
+FROM rocker/shiny-verse:3.6.3
 
 # system libraries of general use
 ## install debian packages
@@ -20,21 +20,30 @@ RUN apt-get update -qq && apt-get -y --no-install-recommends install \
     gcc \
     llvm \
     git \
+    python-dev \
+    python-pip \
     python3 \
     python3-dev\
+    python3-dbg \
     python3-pip \
     python3-venv \
-    python3-wheel
-
-RUN pip3 install -U pip && \
-    pip3 install llvmlite==0.31.0
+    python3-wheel \
+    python3-setuptools \
+    python3-llvmlite
     
 # clone SCAP repo
-RUN git clone --branch dev https://github.com/Single-Cell-Academy/SCAP.git
+COPY . ./SCAP
 
 WORKDIR "/SCAP"
 
-RUN R -e 'renv::restore()'
+RUN python3 -m venv ./renv/python/virtualenvs/renv-python-3.7.3 && \
+    ./renv/python/virtualenvs/renv-python-3.7.3/bin/pip3 install --upgrade pip && \
+    ./renv/python/virtualenvs/renv-python-3.7.3/bin/pip3 install wheel setuptools 
+
+RUN ./renv/python/virtualenvs/renv-python-3.7.3/bin/pip3 install -r requirements.txt
+
+RUN R -e 'renv::use_python(python = "./renv/python/virtualenvs/renv-python-3.7.3/bin/python3")' && \
+    R -e 'renv::restore()'
 
 # expose port
 EXPOSE 3838
