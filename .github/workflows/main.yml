@@ -17,6 +17,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-          repository: singlecellacademy/scap:dev
-          tag_with_ref: true
           push: true
+          tags: singlecellacademy/scap:dev
+
