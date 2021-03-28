@@ -1,20 +1,10 @@
-#' Shiny app ui object
+#' Shiny app ui object 
+
 library("shiny")
 library("shinycssloaders")
-library("shinyFiles")
-library("cowplot")
-library("dplyr")
-library("ggplot2")
-library("ggthemes")
-library("gtools")
-library("loomR")
-library("Matrix")
-library("MODIS")
-library("plotly")
-library("Seurat")
-library("rjson")
-library("dplyr")
+library("plotly")f
 library("reactable")
+library("shinythemes")
 
 ui <- navbarPage(
   
