@@ -104,6 +104,8 @@ ui <- navbarPage(
       ),
       div(style = "height:10px;")
     ),
+    conditionalPanel( ## Only show Dotplot when user selects a categorical variable
+      condition = "output.grouping_1_type=='yes'",
     fluidRow(
       column(
         align = 'center',
@@ -114,26 +116,27 @@ ui <- navbarPage(
           fluidRow(
            uiOutput('dotplot_1') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '400px')
            ),
-          fluidRow(
-            column(
-              width = 4,
-              uiOutput('dotplot_1_feature_select', style = 'padding: 10px')
-              ),
-            column(
-              width = 4,
-              uiOutput('do_split')
-              ),
-            column(
-              width = 4,
-              conditionalPanel(
-                condition = "input.do_split=='yes'",
-                uiOutput('split_by'),
-                tags$head(tags$style("#split_by{overflow-y:scroll; max-height: 200px; background: white;}"))
+            fluidRow(
+              column(
+                width = 4,
+                uiOutput('dotplot_1_feature_select', style = 'padding: 10px')
+                ),
+              column(
+                width = 4,
+                uiOutput('do_split')
+                ),
+              column(
+                width = 4,
+                conditionalPanel(
+                  condition = "input.do_split=='yes'",
+                  uiOutput('split_by'),
+                  tags$head(tags$style("#split_by{overflow-y:scroll; max-height: 200px; background: white;}"))
+                  )
                 )
               )
             )
           )
-        )
+        ) # end of conditional panel for categorical variable
       )
     )
   ),
@@ -358,7 +361,7 @@ ui <- navbarPage(
        column(12,
         plotlyOutput("sankey_diagram", height = "auto"))
        )
-      )    
+      ),
     ),
   tabPanel(
     "File Conversion",
