@@ -1,32 +1,11 @@
-#' Shiny app ui object
-#'
-#' @import shiny
-#' @import shinycssloaders
-#' @import shinyFiles
-#' @import shinyjqui
-#' @import shinythemes
-#' @import dplyr
+#' Shiny app ui object 
 
 library("shiny")
 library("shinycssloaders")
-library("shinyFiles")
-library("shinyjqui")
-library("shinythemes")
-library("cowplot")
-library("dplyr")
-library("ggplot2")
-library("ggthemes")
-library("gtools")
-library("loomR")
-library("hdf5r")
-library("Matrix")
-library("MODIS")
 library("plotly")
-library("presto")
-library("Seurat")
-library("rjson")
-library("dplyr")
 library("reactable")
+library("shinythemes")
+library("shinyFiles")
 
 ui <- navbarPage(
   
