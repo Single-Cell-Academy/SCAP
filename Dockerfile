@@ -38,8 +38,8 @@ WORKDIR "/SCAP"
 
 RUN python3 -m venv ./renv/python/virtualenvs/renv-python-3.7.3 && \
     ./renv/python/virtualenvs/renv-python-3.7.3/bin/pip3 install --upgrade pip && \
-    ./renv/python/virtualenvs/renv-python-3.7.3/bin/pip3 install wheel setuptools &&\
-    ./renv/python/virtualenvs/renv-python-3.7.3/bin/pip3 install -r requirements.txt &&\
+    ./renv/python/virtualenvs/renv-python-3.7.3/bin/pip3 install wheel setuptools && \
+    ./renv/python/virtualenvs/renv-python-3.7.3/bin/pip3 install -r requirements.txt && \
     R -e 'renv::use_python(python = "./renv/python/virtualenvs/renv-python-3.7.3/bin/python3")' && \
     R -e 'renv::restore()'
 

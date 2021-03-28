@@ -15,7 +15,7 @@ library("readr")
 library("reactable")
 library("reticulate")
 
-reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
+#reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 
 #### Variables that persist across sessions
 ## Read in table with datasets available for SciBet

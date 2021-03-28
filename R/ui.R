@@ -2,9 +2,10 @@
 
 library("shiny")
 library("shinycssloaders")
-library("plotly")f
+library("plotly")
 library("reactable")
 library("shinythemes")
+library("shinyFiles")
 
 ui <- navbarPage(
   
