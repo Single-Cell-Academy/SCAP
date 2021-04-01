@@ -15,23 +15,12 @@ library("reticulate")
 
 palette <- colorRampPalette(c("lightgrey", viridis(10)))
 
-check_if_obs_cat <- function(obs_names,
-                             obs_df){
-  obs_cat <- c()
-  for(obs in obs_names){
-    annotation <- obs_df[obs][,,drop=TRUE]
-    if(is.numeric(annotation)){ ## Check if the annotation is numeric
-      uniq_groups <- length(unique(annotation))
-      if(uniq_groups <= 50){
-        category <- obs # categorical
-        obs_cat <- c(obs_cat,category)
-      }
-    }else{
-      category <- obs
-      obs_cat <- c(obs_cat,category)
-    }
-  }
-  return(obs_cat)
+check_if_obs_cat <- function(obs_df){
+  len <- nrow(obs_df)
+  uni <- apply(obs_df, 2, function(x){length(unique(x))})
+  cat <- (uni > (0.05*len))
+  num_check <- apply(obs_df, 2, function(x){suppressWarnings(all(!is.na(as.numeric(as.character(x)))))})
+  return(cat*num_check == 0) # TRUE = discrete, FALSE = continuous
 }
 
 save_figure <- function(file_type, file_name, units, height, width, resolution, to_plot){

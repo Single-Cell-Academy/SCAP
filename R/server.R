@@ -15,7 +15,7 @@ library("readr")
 library("reactable")
 library("reticulate")
 
-#reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
+reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 
 #### Variables that persist across sessions
 ## Read in table with datasets available for SciBet
@@ -76,9 +76,7 @@ server <- function(input, output, session){
     rvalues$features <- rownames(data[[1]]$var)
     rvalues$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
-    obs_cat <- check_if_obs_cat(obs_names = data[[1]]$obs_keys(),
-                     obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
-    rvalues$obs_cat <- obs_cat
+    rvalues$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
     reductions <- data[[1]]$obsm$as_dict()
     reduction_keys <- data[[1]]$obsm_keys()
     r_names <- rownames(data[[1]]$obs)
@@ -204,7 +202,7 @@ server <- function(input, output, session){
   #-- select how to split the dot plot --#
   output$split_by <- renderUI({
     req(input$assay_1, rvalues$obs)
-    choices <- unlist(lapply(rvalues$obs, function(x){
+    choices <- unlist(lapply(rvalues$obs[which(rvalues$obs_cat)], function(x){
       if(length(unique(rvalues$h5ad[[1]]$obs[x][,,drop=TRUE]))>1){
         return(x)
       }
@@ -216,17 +214,36 @@ server <- function(input, output, session){
     }
   })
   
+  ## output variable to hold type of user selected grouping for main panel
+  output$grouping_1_type <- reactive({
+    cat <- rvalues$obs_cat[which(rvalues$obs == input$grouping_1)]
+    if(cat){"yes"}else{"no"}
+  })
+  outputOptions(output, "grouping_1_type", suspendWhenHidden = FALSE)
+  
   #-- dimensional reduction plot coloured by cell groups --#
   output$dimplot_1 <- renderPlotly({
     req(input$grouping_1, input$reduction_1)
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     names(group.by) <- input$grouping_1
     names(group.by[[1]]) <- rvalues$cell_ids
-    dimPlotlyOutput(assay.in = input$assay_1, 
+    cat <- rvalues$obs_cat[which(rvalues$obs == input$grouping_1)]
+    if(cat){
+      dimPlotlyOutput(assay.in = input$assay_1, 
                     reduc.in = rvalues$reductions[[input$reduction_1]], 
                     group.by = group.by, 
                     annot_panel = "", 
                     low.res = 'yes')
+    }else{
+      feature.in <- rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=FALSE]
+      colnames(feature.in) <- input$grouping_1
+      rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
+      featurePlotlyOutput(assay.in = input$assay_1,
+                          reduc.in = rvalues$reductions[[input$reduction_1]],
+                          group.by = group.by,
+                          feature.in = feature.in,
+                          low.res = 'yes')
+    }
   })
   
   #-- dimensional reduction plot coloured by feature expression --#
@@ -347,14 +364,15 @@ server <- function(input, output, session){
   output$grouping_2 <- renderUI({
     req(input$assay_2, rvalues$obs)
     assay <- input$assay_2
-    if(any(grepl("seurat_clusters", rvalues$obs, ignore.case = FALSE))){
-      sel <- rvalues$obs[grep("seurat_clusters", rvalues$obs)]
-    }else if(any(grepl(paste0(tolower(assay),"_clusters"), rvalues$obs, ignore.case = TRUE))){
+    options <- rvalues$obs[which(rvalues$obs_cat)] # only show categorical metadata
+    if(any(grepl("seurat_clusters", options, ignore.case = FALSE))){
+      sel <- rvalues$obs[grep("seurat_clusters", options)]
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"), options, ignore.case = TRUE))){
       sel <- paste0(tolower(assay),"_clusters")
     }else{
-      sel <- rvalues$obs[1]
+      sel <- options[1]
     }
-    selectInput(inputId = 'grouping_2', label = 'Group By', choices = rvalues$obs, selected = sel, multiple = FALSE)
+    selectInput(inputId = 'grouping_2', label = 'Group By', choices = options, selected = sel, multiple = FALSE)
   })
   
   #-- select the clustering method --#
@@ -528,6 +546,7 @@ server <- function(input, output, session){
         rvalues$h5ad[[i]]$obs[input$new_scheme_name] <- new
       }
       rvalues$obs <- rvalues$h5ad[[1]]$obs_keys()
+      rvalues$obs_cat <- check_if_obs_cat(rvalues$h5ad[[1]]$obs)
       showNotification("Saving...", duration = NULL, id = 'save_annot')
           for(i in 1:length(rvalues$path_to_data)){
             rvalues$h5ad[[i]]$write(filename = rvalues$path_to_data[i])
@@ -822,9 +841,6 @@ server <- function(input, output, session){
 #   ####
 #   #-- Functions for annotation comparison--#
 #   ####
-
-#   ## Make meta data annotations a reactive object instead of performing all of the calles 3 times!
-
   #-- get the first list of potential annotations from loom--#
   output$comp_anno_list1 <- renderUI({
     req(input$assay_1)
@@ -832,7 +848,7 @@ server <- function(input, output, session){
     req(rvalues$obs_cat)
 
     ## get annotation options from rvalues
-    annotation_options <- rvalues$obs_cat
+    annotation_options <- rvalues$obs[rvalues$obs_cat]
     
     #group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     selectInput(
@@ -846,7 +862,7 @@ server <- function(input, output, session){
   output$comp_anno_list2 <- renderUI({
     req(input$assay_1,input$comp_anno_1)
 
-    annotation_options <- rvalues$obs_cat
+    annotation_options <- rvalues$obs[rvalues$obs_cat]
     annotation_options <- annotation_options[!grepl(input$comp_anno_1,annotation_options)]
 
     selectInput(
@@ -868,16 +884,24 @@ server <- function(input, output, session){
       ungroup()
 
     colnames(annos_to_compare_stats) <- c("anno1","anno2","n")
+    
+    annos_to_compare_stats <- as.data.frame(annos_to_compare_stats)
+    rownames(annos_to_compare_stats) <- 1:nrow(annos_to_compare_stats)
+
+    # annos_to_compare_stats$anno1 <- as.character(annos_to_compare_stats$anno1)
+    # annos_to_compare_stats$anno2 <- as.character(annos_to_compare_stats$anno2)
 
     annos_to_compare_stats <- annos_to_compare_stats %>%
-      mutate("anno1" = paste(anno1,sep="_")) %>%
-      mutate("anno2" = paste(anno2,sep="_"))
+      mutate("anno1" = paste(input$comp_anno_1,anno1,sep=": ")) %>%
+      mutate("anno2" = paste(input$comp_anno_2,anno2,sep=": "))
 
-    joined_annos <- c(annos_to_compare_stats$anno1,annos_to_compare_stats$anno2)
-    joined_annos <- unique(joined_annos)
+    joined_annos_1 <- unique(annos_to_compare_stats$anno1) 
+    joined_annos_2 <- unique(annos_to_compare_stats$anno2)
 
-    annos_to_compare_stats$IDsource=match(annos_to_compare_stats$anno1, joined_annos)-1
-    annos_to_compare_stats$IDtarget=match(annos_to_compare_stats$anno2, joined_annos)-1
+    annos_to_compare_stats$IDsource= match(annos_to_compare_stats$anno1, joined_annos_1) - 1
+    annos_to_compare_stats$IDtarget= (match(annos_to_compare_stats$anno2, joined_annos_2))  - 1
+    annos_to_compare_stats <- annos_to_compare_stats %>%
+      mutate("IDtarget" = IDtarget + length(joined_annos_1))
 
     return(annos_to_compare_stats)
     })
@@ -898,7 +922,7 @@ server <- function(input, output, session){
       node = list(
         label = joined_annos,
         pad = 15,
-        thickness = 20,
+        thickness = 40,
         line = list(
           color = "black",
           width = 0.5
@@ -910,7 +934,12 @@ server <- function(input, output, session){
         target = sankey_comp()$IDtarget,
         value =  sankey_comp()$n
         )
-      )
+      ) %>%
+      layout(font = list(
+        size = 18)
+        )
+    
+    p
 
     }) # sankey_diagram end
 
@@ -919,7 +948,7 @@ server <- function(input, output, session){
   ## DataTable with SciBet reference information
   output$scibet_references <- renderReactable({
     datasets_scibet_sub <- datasets_scibet %>%
-      select(Species,title,GSE,cell_types,number_of_cells,doi_link)
+      dplyr::select(Species,title,GSE,cell_types,number_of_cells,doi_link)
     
     reactable(datasets_scibet_sub,
               filterable = TRUE,
@@ -1068,9 +1097,7 @@ server <- function(input, output, session){
     
     rvalues$h5ad[[1]]$obs[pred_params_name] <- new_meta_group_list
     rvalues$obs <- rvalues$h5ad[[1]]$obs_keys()
-    obs_cat <- check_if_obs_cat(obs_names = rvalues$h5ad[[1]]$obs_keys(),
-                                obs_df = rvalues$h5ad[[1]]$obs) ## Function to check if an observation is categorical or numeric
-    rvalues$obs_cat <- obs_cat
+    rvalues$obs_cat <- check_if_obs_cat(rvalues$h5ad[[1]]$obs)
     rvalues$h5ad[[1]]$write(filename = rvalues$path_to_data[1])
     
     Sys.sleep(1)
