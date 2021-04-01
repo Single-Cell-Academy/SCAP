@@ -15,7 +15,7 @@ library("readr")
 library("reactable")
 library("reticulate")
 
-#reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
+reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 
 #### Variables that persist across sessions
 ## Read in table with datasets available for SciBet
@@ -202,7 +202,7 @@ server <- function(input, output, session){
   #-- select how to split the dot plot --#
   output$split_by <- renderUI({
     req(input$assay_1, rvalues$obs)
-    choices <- unlist(lapply(rvalues$obs, function(x){
+    choices <- unlist(lapply(rvalues$obs[which(rvalues$obs_cat)], function(x){
       if(length(unique(rvalues$h5ad[[1]]$obs[x][,,drop=TRUE]))>1){
         return(x)
       }
