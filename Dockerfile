@@ -30,6 +30,8 @@ RUN apt-get update -qq && apt-get -y --no-install-recommends install \
     python3-wheel \
     python3-setuptools \
     python3-llvmlite
+
+RUN chmod a+rX -R /root/
     
 # clone SCAP repo
 COPY . ./SCAP
