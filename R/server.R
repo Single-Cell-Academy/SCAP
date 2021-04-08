@@ -217,6 +217,7 @@ server <- function(input, output, session){
   
   ## output variable to hold type of user selected grouping for main panel
   output$grouping_1_type <- reactive({
+    req(input$grouping_1)
     cat <- rvalues$obs_cat[which(rvalues$obs == input$grouping_1)]
     if(cat){"yes"}else{"no"}
   })
@@ -759,6 +760,7 @@ server <- function(input, output, session){
 
   ## output variable to hold type of user selected grouping for main panel
   output$grouping_mod_type <- reactive({
+    req(input$grouping_mod)
     cat <- rvalues_mod$obs_cat[which(rvalues_mod$obs == input$grouping_mod)]
     if(cat){"yes"}else{"no"}
   })

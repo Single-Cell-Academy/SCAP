@@ -297,16 +297,12 @@ library("shinyFiles")
             )
           ),
           column(
-            width = 2,
+            width = 4,
             uiOutput('assay_mod') 
           ),
           column(
-            width = 2,
+            width = 4,
             uiOutput('grouping_mod') 
-          ),
-          column(
-            width = 2,
-            selectInput(inputId = "mod_sel", label = "Select Modality Type", choices = c("None", "GSVA", "CITE-Seq"), selected = "None")
           )
         )
       ),

@@ -928,7 +928,7 @@ ggRidgePlot <- function(
   flip = NULL
 ) {
 
-  cat(file = stderr(), "data$expression: ", summary(data$expression), "\n")
+  #cat(file = stderr(), "data$expression: ", summary(data$expression), "\n")
 
   if (!is.data.frame(x = data) || ncol(x = data) < 2) {
     stop("RidgePlotly requires a data frame with >1 column")
@@ -1022,7 +1022,7 @@ ggRidgePlot <- function(
     axis.text.y = element_text(size = 7),
     axis.text.x = element_text(angle = 45, hjust = 1),
     strip.text.y.right = element_text(angle = 0)
-  )
+  ) + NoLegend()
 
   return(plot)
 }
