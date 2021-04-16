@@ -1,6 +1,7 @@
 library("shiny")
 library("cowplot")
 library("ggplot2")
+library("ggridges")
 library("ggthemes")
 library("gtools")
 library("loomR")
@@ -903,5 +904,126 @@ split_dot_plot <- function(data.features = NULL,
     }
   }
   return(p)
+}
+
+FacetTheme <- function(...) {
+  return(theme(
+    strip.background = element_blank(),
+    strip.text = element_text(face = 'bold'),
+    # Validate the theme
+    validate = TRUE,
+    ...
+  ))
+}
+
+ggRidgePlot <- function(
+  data,
+  sort = FALSE,
+  same.y.lims = TRUE,
+  adjust = 1,
+  pt.size = 0,
+  cols = NULL,
+  log = FALSE,
+  fill.by = NULL,
+  flip = NULL
+) {
+
+  #cat(file = stderr(), "data$expression: ", summary(data$expression), "\n")
+
+  if (!is.data.frame(x = data) || ncol(x = data) < 2) {
+    stop("RidgePlotly requires a data frame with >1 column")
+  }
+
+  if (sort) {
+    data$feature <- as.vector(x = data$feature)
+    data$ident <- as.vector(x = data$ident)
+    # build matrix of average expression (#-features by #-idents), lexical ordering
+    avgs.matrix <- sapply(
+      X = split(x = data, f = data$ident),
+      FUN = function(df) {
+        return(tapply(
+          X = df$expression,
+          INDEX = df$feature,
+          FUN = mean
+        ))
+      }
+    )
+    idents.order <- hclust(d = dist(x = t(x = L2Norm(mat = avgs.matrix, MARGIN = 2))))$order
+    avgs.matrix <- avgs.matrix[,idents.order]
+    avgs.matrix <- L2Norm(mat = avgs.matrix, MARGIN = 1)
+    # order feature clusters by position of their "rank-1 idents"
+    position <- apply(X = avgs.matrix, MARGIN = 1, FUN = which.max)
+    mat <- hclust(d = dist(x = avgs.matrix))$merge
+    orderings <- list()
+    for (i in 1:nrow(mat)) {
+      x <- if (mat[i,1] < 0) -mat[i,1] else orderings[[mat[i,1]]]
+      y <- if (mat[i,2] < 0) -mat[i,2] else orderings[[mat[i,2]]]
+      x.pos <- min(x = position[x])
+      y.pos <- min(x = position[y])
+      orderings[[i]] <- if (x.pos < y.pos) {
+        c(x, y)
+      } else {
+        c(y, x)
+      }
+    }
+    features.order <- orderings[[length(x = orderings)]]
+    data$feature <- factor(
+      x = data$feature,
+      levels = unique(x = sort(x = data$feature))[features.order]
+    )
+    data$ident <- factor(
+      x = data$ident,
+      levels = unique(x = sort(x = data$ident))[rev(x = idents.order)]
+    )
+  } else {
+    data$feature <- factor(x = data$feature, levels = unique(x = data$feature))
+  }
+  # if (log) {
+  #   noise <- rnorm(n = nrow(x = data)) / 200
+  #   data$expression <- data$expression + 1
+  # } else {
+  #   noise <- rnorm(n = nrow(x = data)) / 100000
+  # }
+  # for (f in unique(x = data$feature)) {
+  #   if (all(data$expression[(data$feature == f)] == data$expression[(data$feature == f)][1])) {
+  #     warning(
+  #       "All cells have the same value of ",
+  #       f,
+  #       call. = FALSE,
+  #       immediate. = TRUE
+  #     )
+  #   } else {
+  #     data$expression[(data$feature == f)] <- data$expression[(data$feature == f)] + noise[(data$feature == f)]
+  #   }
+  # }
+
+  # if (flip) {
+  #   x <- 'ident'
+  #   x.label <- 'Identity'
+  #   y <- 'expression'
+  #   y.label <- 'Expression Level'
+  # } else {
+  #   y <- 'ident'
+  #   y.label <- 'Identity'
+  #   x <- 'expression'
+  #   x.label <- 'Expression Level'
+  # }
+
+  data$ident <- reorder_levels(data$ident)
+  
+  plot <- ggplot(data, aes(y=ident, x=expression, fill=ident)) +
+  geom_density_ridges(alpha=0.6, bandwidth=0.5) +
+  xlab("Expression") +
+  ylab("Identity") + 
+  facet_grid(. ~ feature, scales = (if (same.y.lims) 'fixed' else 'free')) +
+  FacetTheme(
+    panel.spacing = unit(0, 'lines'),
+    panel.background = element_rect(fill = NA, color = "black"),
+    axis.text.y = element_text(size = 7),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text.y.right = element_text(angle = 0)
+  ) + NoLegend()
+
+  return(plot)
 }
 

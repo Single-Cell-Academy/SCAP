@@ -35,6 +35,7 @@ server <- function(input, output, session){
   options(shiny.maxRequestSize=500*1024^2)
 
   rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL)
+  rvalues_mod <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL)
 
   ## Determine folders for ShinyDir button
   volumes <- c("FTP" = "/ftp", Home = fs::path_home())
@@ -135,7 +136,7 @@ server <- function(input, output, session){
       path <- sub(".*\\/", "", parseFilePaths(selection = input$h5ad_in, roots = volumes)$datapath)
       return(paste0("Chosen data: ", path))
     }else{
-      return(paste0("Please select your data..."))
+      return(paste0(""))
     }
   })
   
@@ -216,6 +217,7 @@ server <- function(input, output, session){
   
   ## output variable to hold type of user selected grouping for main panel
   output$grouping_1_type <- reactive({
+    req(input$grouping_1)
     cat <- rvalues$obs_cat[which(rvalues$obs == input$grouping_1)]
     if(cat){"yes"}else{"no"}
   })
@@ -587,7 +589,198 @@ server <- function(input, output, session){
     })
     }
   })
-  
+
+  ###==============// MODALITIES TAB //===================####
+  shinyFileChoose(input, "h5ad_in_mod", roots = volumes, session = session)
+
+  observeEvent(input$h5ad_in_mod, {
+    path <- parseFilePaths(selection = input$h5ad_in_mod, roots = volumes)$datapath
+    if(is.integer(path[1]) || identical(path, character(0)) || identical(path, character(0))) return(NULL)
+    h5ad_files <- path#paste0(path,"/",list.files(path))
+    assays <- sub(".h5ad","",sub(paste0(".*/"),"",h5ad_files))
+    data <- list()
+    ## Iterate over all assays and connect to h5ad objects
+    for(i in 1:length(assays)){
+      data[[i]] <- tryCatch({
+        anndata$read(h5ad_files[i])
+      },
+      error = function(e){
+        showModal(modalDialog(p(paste0("An error occured trying to connect to ", h5ad_files[i])), title = "Error connecting to h5ad file."), session = getDefaultReactiveDomain())
+        return(NULL)
+      })
+    }
+    if(is.null(data)) return(NULL)
+    if(length(data) != length(assays)) return(NULL)
+    if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
+    
+    if(all(data[[1]]$obs_names$values == rvalues$h5ad[[1]]$obs_names$values) == FALSE){
+        showModal(modalDialog(p(paste0("Cell mismatch error. Not all cell IDs from ", h5ad_files[i], " match the cell IDs from ", rvalues$path_to_data, ".")), title = "Error connecting to h5ad file."), session = getDefaultReactiveDomain())
+        return(NULL)
+    }
+
+    names(data) <- assays
+    rvalues_mod$features <- rownames(data[[1]]$var)
+    rvalues_mod$obs <- data[[1]]$obs_keys()
+    ## Determine type of annotation and create a layer to annotate for easy usage later on
+    rvalues_mod$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
+    reductions <- data[[1]]$obsm$as_dict()
+    reduction_keys <- data[[1]]$obsm_keys()
+    r_names <- rownames(data[[1]]$obs)
+    for(i in 1:length(reductions)){
+      reductions[[i]] <- as.data.frame(reductions[[i]])
+      colnames(reductions[[i]]) <- paste0(reduction_keys[i], "_", 1:ncol(reductions[[i]]))
+      rownames(reductions[[i]]) <- r_names
+    }
+    names(reductions) <- reduction_keys
+    rvalues_mod$reductions <- reductions
+    rvalues_mod$cell_ids <- rownames(data[[1]]$obs)
+    rvalues_mod$h5ad <- data
+    rvalues_mod$path_to_data <- h5ad_files
+    init <<- 0
+  })
+
+  #-- select input for Assay --#
+  output$assay_mod <- renderUI({
+    req(rvalues_mod$h5ad)
+    selectInput('assay_mod', "Select Assay", 
+      choices = names(rvalues_mod$h5ad), 
+      selected = ifelse(any(names(rvalues_mod$h5ad)=="RNA"),
+        yes = "RNA",
+        no = names(rvalues_mod$h5ad)[1])
+      )
+  })
+
+  #-- Display name of data --#
+  output$data_used_mod <- renderText({
+    if(!is.null(input$assay_mod) & !is.na(input$h5ad_in_mod[[1]][2])){
+      path <- sub(".*\\/", "", parseFilePaths(selection = input$h5ad_in_mod, roots = volumes)$datapath)
+      return(paste0("Chosen data: ", path))
+    }else{
+      return(paste0(""))
+    }
+  })
+
+  output$grouping_mod <- renderUI({
+    req(input$assay_mod, rvalues_mod$obs)
+    assay <- input$assay_mod
+    if(any(grepl("seurat_clusters", rvalues_mod$obs, ignore.case = TRUE))){
+      sel <- rvalues_mod$obs[grep("seurat_clusters", rvalues_mod$obs, , ignore.case = TRUE)]
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"), rvalues_mod$obs, ignore.case = TRUE))){
+      sel <- rvalues_mod$obs[grep(paste0(tolower(assay),"_clusters"), rvalues_mod$obs, , ignore.case = TRUE)]
+    }else if(any(grepl("louvain", rvalues_mod$obs, ignore.case = TRUE))){
+      sel <- rvalues_mod$obs[grep("louvain", rvalues_mod$obs, ignore.case = TRUE)]
+    }else{
+      sel <- rvalues_mod$obs[1]
+    }
+    selectInput(inputId = 'grouping_mod', label = 'Group By', choices = rvalues_mod$obs, selected = sel, multiple = FALSE)
+  })
+
+  output$reduction_mod <- renderUI({
+    req(input$assay_mod)
+    assay <- input$assay_mod
+    options <- names(rvalues_mod$reductions)
+    sel <- if(any(grepl("umap", options, ignore.case = TRUE))){
+      options[grepl("umap", options, ignore.case = TRUE)][1]
+    }else if(any(grepl("tsne", options, ignore.case = TRUE))){
+      options[grepl("tsne", options, ignore.case = TRUE)][1]
+    }else{
+      options[1]
+    }
+    selectInput(inputId = 'reduction_mod', 'Choose Clustering Method', choices = as.list(options), selected = sel)
+  })
+
+  output$featureplot_mod_feature_select <- renderUI({
+    req(input$assay_mod)
+    assay <- input$assay_mod
+    selectInput(inputId = 'featureplot_mod_feature_select', 
+                label = 'Select a Feature to Visualize on the Feature Plot', 
+                choices = rvalues_mod$features, 
+                selected = rvalues_mod$features[1], 
+                multiple = ifelse(input$nebulosa_on == "yes", TRUE, FALSE))
+  })
+
+  output$ridgeplot_mod_feature_select <- renderUI({
+    req(input$assay_mod)
+    assay <- input$assay_mod
+    selectInput(inputId = 'ridgeplot_mod_feature_select', 
+                label = 'Select Features to Visualize on the Ridge Plot', 
+                choices = rvalues_mod$features, 
+                selected = rvalues_mod$features[1], 
+                multiple = TRUE)
+  })
+
+  #-- dimensional reduction plot coloured by cell groups --#
+  output$dimplot_mod <- renderPlotly({
+    req(input$grouping_mod, input$reduction_mod)
+    group.by <- list(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
+    names(group.by) <- input$grouping_mod
+    names(group.by[[1]]) <- rvalues_mod$cell_ids
+    cat <- rvalues_mod$obs_cat[which(rvalues_mod$obs == input$grouping_mod)]
+    if(cat){
+      dimPlotlyOutput(assay.in = input$assay_mod, 
+                    reduc.in = rvalues_mod$reductions[[input$reduction_mod]], 
+                    group.by = group.by, 
+                    annot_panel = "", 
+                    low.res = 'yes')
+    }else{
+      feature.in <- rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=FALSE]
+      colnames(feature.in) <- input$grouping_mod
+      rownames(feature.in) <- rownames(rvalues_mod$reductions[[input$reduction_mod]])
+      featurePlotlyOutput(assay.in = input$assay_mod,
+                          reduc.in = rvalues_mod$reductions[[input$reduction_mod]],
+                          group.by = group.by,
+                          feature.in = feature.in,
+                          low.res = 'yes')
+    }
+  })
+
+  #-- dimensional reduction plot coloured by feature expression --#
+  output$featureplot_mod <- renderPlotly({
+    req(input$grouping_mod, input$reduction_mod, input$featureplot_mod_feature_select)
+    group.by <- list(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
+    names(group.by) <- input$grouping_mod
+    names(group.by[[1]]) <- rvalues_mod$cell_ids
+    feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
+    colnames(feature.in) <- input$featureplot_mod_feature_select
+    rownames(feature.in) <- rownames(rvalues_mod$reductions[[input$reduction_mod]])
+    if(input$nebulosa_on == 'no'){
+      featurePlotlyOutput(assay.in = input$assay_mod,
+                          reduc.in = rvalues_mod$reductions[[input$reduction_mod]],
+                          group.by = group.by,
+                          feature.in = feature.in,
+                          low.res = 'yes')
+    }else{
+      featurePlotlyOutput_nebulosa(assay.in = input$assay_mod,
+                                reduc.in = rvalues_mod$reductions[[input$reduction_mod]],
+                                group.by = as.data.frame(group.by),
+                                feature.in = feature.in,
+                                low.res = 'yes')
+    }
+  })
+
+  ## output variable to hold type of user selected grouping for main panel
+  output$grouping_mod_type <- reactive({
+    req(input$grouping_mod)
+    cat <- rvalues_mod$obs_cat[which(rvalues_mod$obs == input$grouping_mod)]
+    if(cat){"yes"}else{"no"}
+  })
+  outputOptions(output, "grouping_mod_type", suspendWhenHidden = FALSE)
+
+  #-- dimensional reduction plot coloured by cell groups --#
+  output$ridgeplot_mod <- renderPlot({
+    req(input$ridgeplot_mod_feature_select, input$grouping_mod)
+    data.features <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$ridgeplot_mod_feature_select, rvalues_mod$features)])
+    colnames(data.features) <- input$ridgeplot_mod_feature_select
+    rownames(data.features) <- rownames(rvalues_mod$reductions)
+    data.features$id <- as.character(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
+
+    data.features <- reshape2::melt(data.features)
+    colnames(data.features) <- c("ident", "feature", "expression")
+
+    ggRidgePlot(data.features)
+  })
+
+
   ###==============// CUSTOM META DATA TAB //==============####
 
   #-- select input for Assay --#
