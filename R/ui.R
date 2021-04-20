@@ -6,6 +6,7 @@ library("plotly")
 library("reactable")
 library("shinythemes")
 library("shinyFiles")
+library("shinyjs")
 
   ui <- navbarPage(
 
@@ -348,72 +349,80 @@ library("shinyFiles")
           ),
           div(style = "height:10px;")
         ),
-        conditionalPanel( ## Show Ridgeplot when user selects CITE-seq and show differential expression toolkit for CRISPR
+        conditionalPanel( ## Show Ridgeplot when user selects CITE-seq
           condition = "input.mod_sel=='CITE-Seq'",
           fluidRow(
             column(
               align = 'center',
-              width = 6,
+              width = 12,
               offset = 0,
               wellPanel(
                 style  = 'background: white;',
                 fluidRow(
-                  plotOutput('ridgeplot_mod') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '400px')
-                ),
-                fluidRow(
-                  column(
-                    width = 4,
-                    uiOutput('ridgeplot_mod_feature_select', style = 'padding: 10px')
-                  )
+                  plotOutput('ridgeplot_mod') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '400px'),
+                  uiOutput('ridgeplot_mod_feature_select', style = 'padding: 10px')
                 )
               )
             )
           )
         ),
-        conditionalPanel( ## Show Ridgeplot when user selects CITE-seq and show differential expression toolkit for CRISPR
+        conditionalPanel( ## Show differential expression toolkit for CRISPR
           condition = "input.mod_sel=='CRISPR'",
-          fixedRow(
-            column(align = 'left',width = 2,
-                   uiOutput('crispr_feature_1', style = 'padding: 10px'),
-            ),            
-            column(align = 'left',width = 2,
-                   uiOutput('crispr_feature_1_slider', style = 'padding: 10px'),
-            ),          
-            column(align = 'left', width = 4,
-                   plotOutput('crispr_feature_1_dist',
-                              height = '150px')
-                   ),
-            column(align = 'left', width = 2,
-                   textOutput("crispr_feature_1_cells_print")
-            )
-          ),
-          fixedRow(
-            column(align = 'left',width = 2,
-                   uiOutput('crispr_feature_2', style = 'padding: 10px'),
-                   ),
-            column(align = 'left',width = 2,
-                   uiOutput('crispr_feature_2_slider', style = 'padding: 10px'),
-            ), 
-            column(align = 'left', width = 4,
-                   plotOutput('crispr_feature_2_dist',
-                              height = '150px')
-                   ),
-            column(align = 'left', width = 2,
-                   actionButton(inputId = 'crispr_de_analysis', label = "Compare features RNA content!")
+          wellPanel(
+            style  = 'background: white;',
+            fixedRow(align = "center",
+              column(align = 'left',width = 2,
+                     uiOutput('crispr_feature_1', style = 'padding: 10px'),
+              ),            
+              column(align = 'left',width = 2,
+                     uiOutput('crispr_feature_1_slider', style = 'padding: 10px'),
+              ),          
+              column(align = 'left', width = 4,
+                     plotOutput('crispr_feature_1_dist',
+                                height = '150px')
+                     ),
+              column(align = 'left', width = 2,
+                     textOutput("crispr_feature_1_cells_print")
+              )
+            ),
+            hr(),
+            fixedRow(align = "center",
+              column(align = 'left',width = 2,
+                     uiOutput('crispr_feature_2', style = 'padding: 10px'),
+                     ),
+              column(align = 'left',width = 2,
+                     uiOutput('crispr_feature_2_slider', style = 'padding: 10px'),
+              ), 
+              column(align = 'left', width = 4,
+                     plotOutput('crispr_feature_2_dist',
+                                height = '150px')
+                     ),
+              column(align = 'left', width = 2,
+                     textOutput("crispr_feature_2_cells_print"),
+              ),
+              column(align = 'left', width = 2,
+                     actionButton(inputId = 'crispr_de_analysis', label = "Compare RNA content of feature cells!"))
             )
           ),
           br(),
-          fixedRow(
-            column(align = "left", width = 4,
-                   plotlyOutput("crispr_avg_gene_exp",
-                                height = "400px")),
-            column(align = "left", width = 4,
-                   reactableOutput("crispr_avg_gene_exp_tbl")),
-            column(align = "left", width = 4,
-                   tableOutput("selected")
-                   # plotOutput("crispr_gene_vlnplot")
-                   ),
-          ),
+          shinyjs::hidden(
+              wellPanel(id = "crispr_res",
+              style  = 'background: white;',
+              fluidRow(
+                column(align = "center", width = 4,
+                       plotlyOutput("crispr_avg_gene_exp",
+                                    height = 'auto')),
+                
+                column(align = "center", width = 4,
+                       reactableOutput("crispr_avg_gene_exp_tbl",
+                                       height = 'auto')),
+                
+                column(align = "center", width = 4,
+                       plotOutput("crispr_gene_vlnplot")
+                       )
+              )
+            )
+          )
         )
       )
     )
@@ -650,5 +659,6 @@ library("shinyFiles")
   tabPanel(
   "News",
   includeMarkdown("../news/news.md")
-  ) ## end news tabPanel
+  ), ## end news tabPanel
+  useShinyjs()
 )   # end ui

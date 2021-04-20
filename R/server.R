@@ -14,6 +14,7 @@ library("scibet")
 library("readr")
 library("reactable")
 library("reticulate")
+library("shinyjs")
 
 reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 
@@ -784,7 +785,7 @@ server <- function(input, output, session){
   output$crispr_feature_1 <- renderUI({ ## Feature 1 selected for CRISPR
     req(input$assay_mod)
     selectInput(inputId = 'crispr_feature_1_sel', 
-                label = 'Select CRISPR sgRNA #1 you want to compare!', 
+                label = 'Select feature #1 you want to compare!', 
                 choices = rvalues_mod$features, 
                 selected = rvalues_mod$features[1], 
                 multiple = FALSE)
@@ -797,7 +798,7 @@ server <- function(input, output, session){
     max_val <- round(max(rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]),2)
     sel_value <- median((rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]))
     sliderInput(inputId = 'crispr_feature_1_slider_val', 
-                label = 'Select CRISPR sgRNA #1 you want to compare!', 
+                label = 'Set your expression cutoff for feature 1!', 
                 min = min_val,
                 max = max_val,
                 value = sel_value)
@@ -812,8 +813,8 @@ server <- function(input, output, session){
                                            "feature" = input$crispr_feature_1_sel)
 
     ggplot(crispr_exp_feature_1_df,aes(exp,fill = feature)) +
-      geom_density() +
-      theme_minimal() +
+      geom_density(fill = "#4682B4") +
+      theme_cowplot() +
       geom_vline(xintercept = input$crispr_feature_1_slider_val,
                  size = 1.5,
                  color = "black",
@@ -838,7 +839,9 @@ server <- function(input, output, session){
   output$crispr_feature_1_cells_print <- renderText({
     req(crispr_feature_1_cells())
     cells_pass <- subset(crispr_feature_1_cells(),pass_exp_thr == "yes")
-    paste("There are",dim(cells_pass),"cells above your selected threshold for this feature!")
+    res_string <- paste("There are ",nrow(cells_pass)," cells above your selected threshold for feature:",
+                        input$crispr_feature_1_sel,sep="")
+    res_string
   })
 
   
@@ -850,7 +853,7 @@ server <- function(input, output, session){
     feature_options <- setdiff(rvalues_mod$features,input$crispr_feature_1_sel)
 
     selectInput(inputId = 'crispr_feature_2_sel', 
-                label = 'Select CRISPR sgRNA #2 you want to compare!', 
+                label = 'Select feature #2 you want to compare!', 
                 choices = feature_options, 
                 selected = feature_options[1], 
                 multiple = FALSE)
@@ -863,7 +866,7 @@ server <- function(input, output, session){
     max_val <- round(max(rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]),2)
     sel_value <- median((rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]))
     sliderInput(inputId = 'crispr_feature_2_slider_val', 
-                label = 'Select CRISPR sgRNA #1 you want to compare!', 
+                label = 'Set your expression cutoff for feature 2!', 
                 min = min_val,
                 max = max_val,
                 value = sel_value)
@@ -878,8 +881,8 @@ server <- function(input, output, session){
                                            "feature" = input$crispr_feature_2_sel)
     
     ggplot(crispr_exp_feature_2_df,aes(exp,fill = feature)) +
-      geom_density() +
-      theme_minimal() +
+      geom_density(fill = "#B47846") +
+      theme_cowplot() +
       geom_vline(xintercept = input$crispr_feature_2_slider_val,
                  size = 1.5,
                  color = "black",
@@ -905,35 +908,37 @@ server <- function(input, output, session){
   output$crispr_feature_2_cells_print <- renderText({
     req(crispr_feature_2_cells())
     cells_pass <- subset(crispr_feature_2_cells(),pass_exp_thr == "yes")
-    paste("There are",dim(cells_pass),"cells above your selected threshold for this feature!")
+    res_string <- paste("There are ",nrow(cells_pass)," cells above your selected threshold for feature:",
+                        input$crispr_feature_2_sel,sep="")
+    res_string
   })
 
   
   #### Action button for calculating CRISPR DE
   observeEvent(input$crispr_de_analysis,{
+    shinyjs::showElement(id= "crispr_res")
     
-    crispr_feature_1_cells_rna <- reactive({
-      req(crispr_feature_1_cells())
+    crispr_feature_1_cells_rna <- isolate({
+      #req(crispr_feature_1_cells())
       pos_cells <- subset(crispr_feature_1_cells(),pass_exp_thr == "yes")
       crispr_feature_1_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(pos_cells$cell_id,rvalues$cell_ids),])
-      crispr_feature_1_rna_mat <- colSums(crispr_feature_1_rna_mat)
       crispr_feature_1_rna_mat
     })
     
-    crispr_feature_2_cells_rna <- reactive({
-      req(crispr_feature_2_cells())
+    crispr_feature_2_cells_rna <- isolate({
+      #req(crispr_feature_2_cells())
       pos_cells <- subset(crispr_feature_2_cells(),pass_exp_thr == "yes")
       crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(pos_cells$cell_id,rvalues$cell_ids),])
-      crispr_feature_2_rna_mat <- colSums(crispr_feature_2_rna_mat)
       crispr_feature_2_rna_mat
     })
     
     merged_crispr_feature_avg_exp <- reactive({
-      req(crispr_feature_1_cells_rna())
-      req(crispr_feature_2_cells_rna())
       
-      merged_colSums <- data.frame("feature_1_avg_exp"= crispr_feature_1_cells_rna(),
-                                   "feature_2_avg_exp" = crispr_feature_2_cells_rna(),
+      crispr_feature_1_rna_mat <- colMeans(crispr_feature_1_cells_rna)
+      crispr_feature_2_rna_mat <- colMeans(crispr_feature_2_cells_rna)
+      
+      merged_colSums <- data.frame("feature_1_avg_exp"= crispr_feature_1_rna_mat,
+                                   "feature_2_avg_exp" = crispr_feature_2_rna_mat,
                                    "gene" = rvalues$features)
       
       merged_colSums <- merged_colSums %>%
@@ -946,60 +951,65 @@ server <- function(input, output, session){
     
     output$crispr_avg_gene_exp <- renderPlotly({
       req(merged_crispr_feature_avg_exp())
+      
       avg_exp_plot <- ggplot(merged_crispr_feature_avg_exp(),aes(feature_1_avg_exp,feature_2_avg_exp,
                                                 text = gene)) +
         geom_point() +
         theme_minimal() +
-        labs(x = "Feature 1 - Avg gene expression",
-             y = "Feature 1 - Avg gene expression",
+        labs(x = paste(isolate(input$crispr_feature_1_sel)," - Avg gene expression",sep=""),
+             y =  paste(isolate(input$crispr_feature_2_sel)," - Avg gene expression",sep=""),
              title = "Average gene expression")
       
-      ggplotly(avg_exp_plot)
+      if(is.null(selected())){
+        ggplotly(avg_exp_plot)
+      }else{
+        gene_selected <- merged_crispr_feature_avg_exp()[selected(),]$gene
+        avg_exp_plot <- avg_exp_plot +
+          geom_point(data = subset(merged_crispr_feature_avg_exp(),gene == gene_selected),
+                     color = "red", size = 2)
+        ggplotly(avg_exp_plot)
+      }
     })
-    
+
     selected <- reactive(getReactableState("crispr_avg_gene_exp_tbl", "selected"))
+    
     output$crispr_avg_gene_exp_tbl <- renderReactable({
       req(merged_crispr_feature_avg_exp())
     
       reactable(merged_crispr_feature_avg_exp(),
-                selection = "single",onClick = "select")
+                selection = 'single' , onClick = 'select', searchable = TRUE,)
     })
     
-    output$selected <- renderTable({
+    output$crispr_gene_vlnplot <- renderPlot({
       req(crispr_feature_1_cells())
       req(crispr_feature_2_cells())
       req(merged_crispr_feature_avg_exp())
       req(selected())
       
-      gene_selected <- merged_crispr_feature_avg_exp()[selected(), ]$gene
+      gene_selected <- merged_crispr_feature_avg_exp()[selected(),]$gene
       
-      pos_cells_feature_1 <- subset(crispr_feature_1_cells(),pass_exp_thr == "yes")
-      pos_cells_feature_2 <- subset(crispr_feature_2_cells(),pass_exp_thr == "yes")
-      all_cells <- rbind(pos_cells_feature_1,pos_cells_feature_2)
-      crispr_features_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(unique(all_cells$cell_id),rvalues$cell_ids),
-                                                                   ])
-      #match(gene_selected,rvalues$features)
-      crispr_features_rna_mat
+      feature_1_gene_exp <- crispr_feature_1_cells_rna
+      colnames(feature_1_gene_exp) <- rvalues$features
+      feature_1_gene_exp <- feature_1_gene_exp[,gene_selected]
+      feature_1_gene_exp_df <- data.frame("exp" = feature_1_gene_exp,
+                                            "group" = input$crispr_feature_1_sel)
+      feature_2_gene_exp <- crispr_feature_2_cells_rna
+      colnames(feature_2_gene_exp) <- rvalues$features
+      feature_2_gene_exp <- feature_2_gene_exp[,gene_selected]
+      feature_2_gene_exp_df <- data.frame("exp" = feature_2_gene_exp,
+                                          "group" =  input$crispr_feature_2_sel)
+      merged_feature_gene_exp <- rbind(feature_1_gene_exp_df,feature_2_gene_exp_df)
+
+      ggplot(merged_feature_gene_exp,aes(group,exp,fill = group)) +
+        geom_violin() +
+        stat_summary(fun=mean, geom="point", size=5, color = "black") +
+        scale_fill_manual(values = c("#4682B4","#B47846")) +
+        theme_cowplot() +
+        theme(legend.position = "none") +
+        labs(x = "Features",
+             y = "Gene expression",
+             title = gene_selected)
     })
-    
-    # output$crispr_gene_vlnplot <- renderPlot({
-    #   req(crispr_feature_1_cells())
-    #   req(crispr_feature_2_cells())
-    #   req(merged_crispr_feature_avg_exp())
-    #   req(selected())
-    #   
-    #   gene_selected <- merged_crispr_feature_avg_exp()[selected(), ]$gene
-    #   
-    #   pos_cells_feature_1 <- subset(crispr_feature_1_cells(),pass_exp_thr == "yes")
-    #   pos_cells_feature_2 <- subset(crispr_feature_2_cells(),pass_exp_thr == "yes")
-    #   all_cells <- rbind(pos_cells_feature_1,pos_cells_feature_2)
-    #   crispr_features_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(all_cells$cell_id,rvalues$cell_ids),match(gene_selected,rvalues$features)])
-    #   colnames(crispr_features_rna_mat) <- "test"
-    #   
-    #   ggplot(crispr_features_rna_mat,aes(test)) +
-    #     geom_density()
-    #   
-    # })
     
   })
 

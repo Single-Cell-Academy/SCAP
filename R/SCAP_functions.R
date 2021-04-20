@@ -1012,7 +1012,8 @@ ggRidgePlot <- function(
   data$ident <- reorder_levels(data$ident)
   
   plot <- ggplot(data, aes(y=ident, x=expression, fill=ident)) +
-  geom_density_ridges(alpha=0.6, bandwidth=0.5) +
+  geom_density_ridges(alpha=0.6, bandwidth=0.5,
+                      quantile_lines = TRUE, quantiles = 2) +
   xlab("Expression") +
   ylab("Identity") + 
   facet_grid(. ~ feature, scales = (if (same.y.lims) 'fixed' else 'free')) +
