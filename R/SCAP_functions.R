@@ -755,9 +755,9 @@ featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, feature.
                                     key = unique(sub("_[0-9]$", "", colnames(reduc.in)))) 
   
   if(ncol(feature.in) == 1){
-    return(plot_density(data_seurat, features = colnames(feature.in), size = 2) + theme_cowplot())
+    return(plot_density(data_seurat, features = colnames(feature.in), size = 1) + theme_cowplot())
   }else{
-    p <- plot_density(data_seurat, features = colnames(feature.in), joint = TRUE, combine = FALSE, size = 2) 
+    p <- plot_density(data_seurat, features = colnames(feature.in), joint = TRUE, combine = FALSE, size = 1) 
     return(p[[length(p)]] + theme_cowplot())
   }
 }

@@ -297,12 +297,16 @@ library("shinyFiles")
             )
           ),
           column(
-            width = 4,
+            width = 2,
             uiOutput('assay_mod') 
           ),
           column(
-            width = 4,
+            width = 2,
             uiOutput('grouping_mod') 
+          ),
+          column(
+            width = 2,
+            selectInput(inputId = "mod_sel", label = "Select Modality Type", choices = c("None", "CRISPR", "CITE-Seq"), selected = "None")
           )
         )
       ),
@@ -333,7 +337,7 @@ library("shinyFiles")
                 column(
                   width = 3,
                   br(),
-                  radioButtons('nebulosa_on', label = 'Nebulosa plot', choices = c('yes', 'no'), selected = 'no', inline = TRUE)
+                  radioButtons('nebulosa_mod_on', label = 'Nebulosa plot', choices = c('yes', 'no'), selected = 'no', inline = TRUE)
                 ),
                 column(
                   width = 9,
@@ -344,12 +348,12 @@ library("shinyFiles")
           ),
           div(style = "height:10px;")
         ),
-        conditionalPanel( ## Only show Dotplot when user selects a categorical variable
-          condition = "output.grouping_mod_type=='yes'",
+        conditionalPanel( ## Show Ridgeplot when user selects CITE-seq and show differential expression toolkit for CRISPR
+          condition = "input.mod_sel=='CITE-Seq'",
           fluidRow(
             column(
               align = 'center',
-              width = 12,
+              width = 6,
               offset = 0,
               wellPanel(
                 style  = 'background: white;',
@@ -365,6 +369,51 @@ library("shinyFiles")
               )
             )
           )
+        ),
+        conditionalPanel( ## Show Ridgeplot when user selects CITE-seq and show differential expression toolkit for CRISPR
+          condition = "input.mod_sel=='CRISPR'",
+          fixedRow(
+            column(align = 'left',width = 2,
+                   uiOutput('crispr_feature_1', style = 'padding: 10px'),
+            ),            
+            column(align = 'left',width = 2,
+                   uiOutput('crispr_feature_1_slider', style = 'padding: 10px'),
+            ),          
+            column(align = 'left', width = 4,
+                   plotOutput('crispr_feature_1_dist',
+                              height = '150px')
+                   ),
+            column(align = 'left', width = 2,
+                   textOutput("crispr_feature_1_cells_print")
+            )
+          ),
+          fixedRow(
+            column(align = 'left',width = 2,
+                   uiOutput('crispr_feature_2', style = 'padding: 10px'),
+                   ),
+            column(align = 'left',width = 2,
+                   uiOutput('crispr_feature_2_slider', style = 'padding: 10px'),
+            ), 
+            column(align = 'left', width = 4,
+                   plotOutput('crispr_feature_2_dist',
+                              height = '150px')
+                   ),
+            column(align = 'left', width = 2,
+                   actionButton(inputId = 'crispr_de_analysis', label = "Compare features RNA content!")
+            )
+          ),
+          br(),
+          fixedRow(
+            column(align = "left", width = 4,
+                   plotlyOutput("crispr_avg_gene_exp",
+                                height = "400px")),
+            column(align = "left", width = 4,
+                   reactableOutput("crispr_avg_gene_exp_tbl")),
+            column(align = "left", width = 4,
+                   tableOutput("selected")
+                   # plotOutput("crispr_gene_vlnplot")
+                   ),
+          ),
         )
       )
     )
