@@ -411,14 +411,17 @@ library("shinyjs")
               fluidRow(
                 column(align = "center", width = 4,
                        plotlyOutput("crispr_avg_gene_exp",
-                                    height = 'auto')),
+                                    height = 'auto') %>% withSpinner(type = 3,color.background = "white",
+                                                                     color="black", proxy.height = '400px')),
                 
                 column(align = "center", width = 4,
                        reactableOutput("crispr_avg_gene_exp_tbl",
-                                       height = 'auto')),
+                                       height = 'auto') %>% withSpinner(type = 3,color.background = "white",
+                                                                        color="black", proxy.height = '400px')),
                 
                 column(align = "center", width = 4,
-                       plotOutput("crispr_gene_vlnplot")
+                       plotOutput("crispr_gene_vlnplot") %>% withSpinner(type = 3,color.background = "white",
+                                                                         color="black", proxy.height = '400px')
                        )
               )
             )

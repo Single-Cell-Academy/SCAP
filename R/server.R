@@ -794,9 +794,10 @@ server <- function(input, output, session){
   output$crispr_feature_1_slider <- renderUI({ ## Feature 1 selected for CRISPR
     req(input$assay_mod)
     req(input$crispr_feature_1_sel)
-    min_val <- round(min(rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]),2)
-    max_val <- round(max(rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]),2)
-    sel_value <- median((rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]))
+    expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
+    min_val <- round(min(expr_range),2)
+    max_val <- round(max(expr_range),2)
+    sel_value <- median((expr_range))
     sliderInput(inputId = 'crispr_feature_1_slider_val', 
                 label = 'Set your expression cutoff for feature 1!', 
                 min = min_val,
@@ -809,7 +810,7 @@ server <- function(input, output, session){
     req(input$crispr_feature_1_sel)
     req(input$crispr_feature_1_slider_val)
     
-    crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+    crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
                                            "feature" = input$crispr_feature_1_sel)
 
     ggplot(crispr_exp_feature_1_df,aes(exp,fill = feature)) +
@@ -827,7 +828,7 @@ server <- function(input, output, session){
     req(input$crispr_feature_1_sel)
     req(input$crispr_feature_1_slider_val)
 
-    crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+    crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
                                            "feature" = input$crispr_feature_1_sel)
     crispr_exp_feature_1_df <- crispr_exp_feature_1_df %>%
       mutate("pass_exp_thr" = if_else(exp >= input$crispr_feature_1_slider_val,"yes","no"),
@@ -862,9 +863,10 @@ server <- function(input, output, session){
   output$crispr_feature_2_slider <- renderUI({ ## Feature 1 selected for CRISPR
     req(input$assay_mod)
     req(input$crispr_feature_2_sel)
-    min_val <- round(min(rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]),2)
-    max_val <- round(max(rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]),2)
-    sel_value <- median((rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]))
+    expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
+    min_val <- round(min(expr_range),2)
+    max_val <- round(max(expr_range),2)
+    sel_value <- median(expr_range)
     sliderInput(inputId = 'crispr_feature_2_slider_val', 
                 label = 'Set your expression cutoff for feature 2!', 
                 min = min_val,
@@ -877,7 +879,8 @@ server <- function(input, output, session){
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
-    crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
+    crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, 
+                                                                                     rvalues_mod$features)],
                                            "feature" = input$crispr_feature_2_sel)
     
     ggplot(crispr_exp_feature_2_df,aes(exp,fill = feature)) +
@@ -896,7 +899,7 @@ server <- function(input, output, session){
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
-    crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
+    crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
                                            "feature" = input$crispr_feature_2_sel)
     crispr_exp_feature_2_df <- crispr_exp_feature_2_df %>%
       mutate("pass_exp_thr" = if_else(exp >= input$crispr_feature_2_slider_val,"yes","no"),
@@ -912,7 +915,6 @@ server <- function(input, output, session){
                         input$crispr_feature_2_sel,sep="")
     res_string
   })
-
   
   #### Action button for calculating CRISPR DE
   observeEvent(input$crispr_de_analysis,{
@@ -921,54 +923,47 @@ server <- function(input, output, session){
     crispr_feature_1_cells_rna <- isolate({
       #req(crispr_feature_1_cells())
       pos_cells <- subset(crispr_feature_1_cells(),pass_exp_thr == "yes")
-      crispr_feature_1_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(pos_cells$cell_id,rvalues$cell_ids),])
+      hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
+      crispr_feature_1_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
       crispr_feature_1_rna_mat
     })
     
     crispr_feature_2_cells_rna <- isolate({
       #req(crispr_feature_2_cells())
       pos_cells <- subset(crispr_feature_2_cells(),pass_exp_thr == "yes")
-      crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(pos_cells$cell_id,rvalues$cell_ids),])
+      hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
+      crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
       crispr_feature_2_rna_mat
     })
     
     merged_crispr_feature_avg_exp <- reactive({
       
-      crispr_feature_1_rna_mat <- colMeans(crispr_feature_1_cells_rna)
-      crispr_feature_2_rna_mat <- colMeans(crispr_feature_2_cells_rna)
+      crispr_feature_1_rna_mat_means <- colMeans(as.matrix(crispr_feature_1_cells_rna))
+      crispr_feature_2_rna_mat_means <- colMeans(as.matrix(crispr_feature_2_cells_rna))
+      gene_names <- rownames(rvalues$h5ad[[1]]$var)
       
-      merged_colSums <- data.frame("feature_1_avg_exp"= crispr_feature_1_rna_mat,
-                                   "feature_2_avg_exp" = crispr_feature_2_rna_mat,
-                                   "gene" = rvalues$features)
+      merged_colMeans <- data.frame("feature_1_avg_exp"= crispr_feature_1_rna_mat_means,
+                                    "feature_2_avg_exp" = crispr_feature_2_rna_mat_means,
+                                    "gene" = gene_names)
       
-      merged_colSums <- merged_colSums %>%
+      merged_colMeans <- merged_colMeans %>%
         mutate("diff_features_avg_exp" = feature_1_avg_exp - feature_2_avg_exp) %>%
         mutate_if(is.numeric, round,2)
       
-      merged_colSums
+      merged_colMeans
     })
-
     
     output$crispr_avg_gene_exp <- renderPlotly({
       req(merged_crispr_feature_avg_exp())
-      
-      avg_exp_plot <- ggplot(merged_crispr_feature_avg_exp(),aes(feature_1_avg_exp,feature_2_avg_exp,
-                                                text = gene)) +
-        geom_point() +
-        theme_minimal() +
-        labs(x = paste(isolate(input$crispr_feature_1_sel)," - Avg gene expression",sep=""),
-             y =  paste(isolate(input$crispr_feature_2_sel)," - Avg gene expression",sep=""),
-             title = "Average gene expression")
-      
-      if(is.null(selected())){
-        ggplotly(avg_exp_plot)
-      }else{
-        gene_selected <- merged_crispr_feature_avg_exp()[selected(),]$gene
-        avg_exp_plot <- avg_exp_plot +
-          geom_point(data = subset(merged_crispr_feature_avg_exp(),gene == gene_selected),
-                     color = "red", size = 2)
-        ggplotly(avg_exp_plot)
-      }
+      avg_exp_plot_plotly <- plot_ly(data = merged_crispr_feature_avg_exp(),
+                                     x = ~feature_1_avg_exp,
+                                     y = ~feature_2_avg_exp,
+                                     text = ~paste("Gene: ", gene,sep=" "),
+                                     type = 'scatter',
+                                     mode = 'markers',
+                                     marker = list(size = 6,
+                                                   color = 'black'))
+      avg_exp_plot_plotly
     })
 
     selected <- reactive(getReactableState("crispr_avg_gene_exp_tbl", "selected"))
@@ -981,23 +976,20 @@ server <- function(input, output, session){
     })
     
     output$crispr_gene_vlnplot <- renderPlot({
-      req(crispr_feature_1_cells())
-      req(crispr_feature_2_cells())
       req(merged_crispr_feature_avg_exp())
       req(selected())
       
       gene_selected <- merged_crispr_feature_avg_exp()[selected(),]$gene
+      gene_selected_index <- match(gene_selected,rownames(rvalues$h5ad[[1]]$var))
       
       feature_1_gene_exp <- crispr_feature_1_cells_rna
-      colnames(feature_1_gene_exp) <- rvalues$features
-      feature_1_gene_exp <- feature_1_gene_exp[,gene_selected]
+      feature_1_gene_exp <- feature_1_gene_exp[,gene_selected_index]
       feature_1_gene_exp_df <- data.frame("exp" = feature_1_gene_exp,
-                                            "group" = input$crispr_feature_1_sel)
+                                            "group" = isolate(input$crispr_feature_1_sel))
       feature_2_gene_exp <- crispr_feature_2_cells_rna
-      colnames(feature_2_gene_exp) <- rvalues$features
-      feature_2_gene_exp <- feature_2_gene_exp[,gene_selected]
+      feature_2_gene_exp <- feature_2_gene_exp[,gene_selected_index]
       feature_2_gene_exp_df <- data.frame("exp" = feature_2_gene_exp,
-                                          "group" =  input$crispr_feature_2_sel)
+                                          "group" =  isolate(input$crispr_feature_2_sel))
       merged_feature_gene_exp <- rbind(feature_1_gene_exp_df,feature_2_gene_exp_df)
 
       ggplot(merged_feature_gene_exp,aes(group,exp,fill = group)) +
