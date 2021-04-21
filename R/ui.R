@@ -6,6 +6,7 @@ library("plotly")
 library("reactable")
 library("shinythemes")
 library("shinyFiles")
+library("shinyjs")
 
   ui <- navbarPage(
 
@@ -297,12 +298,16 @@ library("shinyFiles")
             )
           ),
           column(
-            width = 4,
+            width = 2,
             uiOutput('assay_mod') 
           ),
           column(
-            width = 4,
+            width = 2,
             uiOutput('grouping_mod') 
+          ),
+          column(
+            width = 2,
+            selectInput(inputId = "mod_sel", label = "Select Modality Type", choices = c("None", "CRISPR", "CITE-Seq"), selected = "None")
           )
         )
       ),
@@ -333,7 +338,7 @@ library("shinyFiles")
                 column(
                   width = 3,
                   br(),
-                  radioButtons('nebulosa_on', label = 'Nebulosa plot', choices = c('yes', 'no'), selected = 'no', inline = TRUE)
+                  radioButtons('nebulosa_mod_on', label = 'Nebulosa plot', choices = c('yes', 'no'), selected = 'no', inline = TRUE)
                 ),
                 column(
                   width = 9,
@@ -344,8 +349,8 @@ library("shinyFiles")
           ),
           div(style = "height:10px;")
         ),
-        conditionalPanel( ## Only show Dotplot when user selects a categorical variable
-          condition = "output.grouping_mod_type=='yes'",
+        conditionalPanel( ## Show Ridgeplot when user selects CITE-seq
+          condition = "input.mod_sel=='CITE-Seq'",
           fluidRow(
             column(
               align = 'center',
@@ -354,14 +359,70 @@ library("shinyFiles")
               wellPanel(
                 style  = 'background: white;',
                 fluidRow(
-                  plotOutput('ridgeplot_mod') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '400px')
-                ),
-                fluidRow(
-                  column(
-                    width = 4,
-                    uiOutput('ridgeplot_mod_feature_select', style = 'padding: 10px')
-                  )
+                  plotOutput('ridgeplot_mod') %>% withSpinner(color="black",type = 7,size = 0.5,proxy.height = '400px'),
+                  uiOutput('ridgeplot_mod_feature_select', style = 'padding: 10px')
                 )
+              )
+            )
+          )
+        ),
+        conditionalPanel( ## Show differential expression toolkit for CRISPR
+          condition = "input.mod_sel=='CRISPR'",
+          wellPanel(
+            style  = 'background: white;',
+            fixedRow(align = "center",
+              column(align = 'left',width = 2,
+                     uiOutput('crispr_feature_1', style = 'padding: 10px'),
+              ),            
+              column(align = 'left',width = 2,
+                     uiOutput('crispr_feature_1_slider', style = 'padding: 10px'),
+              ),          
+              column(align = 'left', width = 4,
+                     plotOutput('crispr_feature_1_dist',
+                                height = '150px')
+                     ),
+              column(align = 'left', width = 2,
+                     textOutput("crispr_feature_1_cells_print")
+              )
+            ),
+            hr(),
+            fixedRow(align = "center",
+              column(align = 'left',width = 2,
+                     uiOutput('crispr_feature_2', style = 'padding: 10px'),
+                     ),
+              column(align = 'left',width = 2,
+                     uiOutput('crispr_feature_2_slider', style = 'padding: 10px'),
+              ), 
+              column(align = 'left', width = 4,
+                     plotOutput('crispr_feature_2_dist',
+                                height = '150px')
+                     ),
+              column(align = 'left', width = 2,
+                     textOutput("crispr_feature_2_cells_print"),
+              ),
+              column(align = 'left', width = 2,
+                     actionButton(inputId = 'crispr_de_analysis', label = "Compare RNA content of feature cells!"))
+            )
+          ),
+          br(),
+          shinyjs::hidden(
+              wellPanel(id = "crispr_res",
+              style  = 'background: white;',
+              fluidRow(
+                column(align = "center", width = 4,
+                       plotlyOutput("crispr_avg_gene_exp",
+                                    height = 'auto') %>% withSpinner(type = 3,color.background = "white",
+                                                                     color="black", proxy.height = '400px')),
+                
+                column(align = "center", width = 4,
+                       reactableOutput("crispr_avg_gene_exp_tbl",
+                                       height = 'auto') %>% withSpinner(type = 3,color.background = "white",
+                                                                        color="black", proxy.height = '400px')),
+                
+                column(align = "center", width = 4,
+                       plotOutput("crispr_gene_vlnplot") %>% withSpinner(type = 3,color.background = "white",
+                                                                         color="black", proxy.height = '400px')
+                       )
               )
             )
           )
@@ -601,5 +662,6 @@ library("shinyFiles")
   tabPanel(
   "News",
   includeMarkdown("../news/news.md")
-  ) ## end news tabPanel
+  ), ## end news tabPanel
+  useShinyjs()
 )   # end ui

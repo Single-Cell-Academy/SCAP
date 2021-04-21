@@ -755,9 +755,9 @@ featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, feature.
                                     key = unique(sub("_[0-9]$", "", colnames(reduc.in)))) 
   
   if(ncol(feature.in) == 1){
-    return(plot_density(data_seurat, features = colnames(feature.in), size = 2) + theme_cowplot())
+    return(plot_density(data_seurat, features = colnames(feature.in), size = 1) + theme_cowplot())
   }else{
-    p <- plot_density(data_seurat, features = colnames(feature.in), joint = TRUE, combine = FALSE, size = 2) 
+    p <- plot_density(data_seurat, features = colnames(feature.in), joint = TRUE, combine = FALSE, size = 1) 
     return(p[[length(p)]] + theme_cowplot())
   }
 }
@@ -1012,7 +1012,8 @@ ggRidgePlot <- function(
   data$ident <- reorder_levels(data$ident)
   
   plot <- ggplot(data, aes(y=ident, x=expression, fill=ident)) +
-  geom_density_ridges(alpha=0.6, bandwidth=0.5) +
+  geom_density_ridges(alpha=0.6, bandwidth=0.5,
+                      quantile_lines = TRUE, quantiles = 2) +
   xlab("Expression") +
   ylab("Identity") + 
   facet_grid(. ~ feature, scales = (if (same.y.lims) 'fixed' else 'free')) +
