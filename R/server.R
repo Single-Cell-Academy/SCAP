@@ -1081,6 +1081,7 @@ server <- function(input, output, session){
       }
       Sys.sleep(2)
       removeModal(session = getDefaultReactiveDomain())
+      # save to object
       showNotification("Saving...", duration = NULL, id = 'save_meta')
       rvalues$obs <- rvalues$h5ad[[1]]$obs_keys()
       rvalues$obs_cat <- check_if_obs_cat(rvalues$h5ad[[1]]$obs)
