@@ -17,6 +17,12 @@
     "Name": null
   },
   "Packages": {
+    "AnnotationDbi": {
+      "Package": "AnnotationDbi",
+      "Version": "1.48.0",
+      "Source": "Bioconductor",
+      "Hash": "c5f3f140470b1941580859d3fc5c6bc0"
+    },
     "BH": {
       "Package": "BH",
       "Version": "1.72.0-3",
@@ -56,6 +62,12 @@
       "Repository": "CRAN",
       "Hash": "4744be45519d675af66c28478720fce5"
     },
+    "DESeq2": {
+      "Package": "DESeq2",
+      "Version": "1.26.0",
+      "Source": "Bioconductor",
+      "Hash": "2d7498bcee6497bfb16433828cca25fe"
+    },
     "DT": {
       "Package": "DT",
       "Version": "0.17",
@@ -76,6 +88,13 @@
       "Repository": "CRAN",
       "Hash": "b56998fff55e4a4b4860ad6e8c67e0f9"
     },
+    "Formula": {
+      "Package": "Formula",
+      "Version": "1.2-4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "cc8c8c4d61346cde1ca60030ff9c241f"
+    },
     "GenomeInfoDb": {
       "Package": "GenomeInfoDb",
       "Version": "1.22.1",
@@ -93,6 +112,13 @@
       "Version": "1.38.0",
       "Source": "Bioconductor",
       "Hash": "8ff54983afa8eda100fa0fcadd6816bf"
+    },
+    "Hmisc": {
+      "Package": "Hmisc",
+      "Version": "4.4-1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "35bce0d50fdf86441171ff6742e29c8c"
     },
     "IRanges": {
       "Package": "IRanges",
@@ -175,6 +201,13 @@
       "Repository": "CRAN",
       "Hash": "cc151930e20e16427bc3d0daec62b4a9"
     },
+    "RSQLite": {
+      "Package": "RSQLite",
+      "Version": "2.2.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "66fe0e309e72a1d0f9cceed5c01fab94"
+    },
     "RSpectra": {
       "Package": "RSpectra",
       "Version": "0.16-0",
@@ -241,14 +274,14 @@
       "Package": "SeuratDisk",
       "Version": "0.0.0.9013",
       "Source": "GitHub",
-      "Remotes": "satijalab/seurat-data",
       "RemoteType": "github",
+      "Remotes": "satijalab/seurat-data",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "seurat-disk",
       "RemoteUsername": "mojaveazure",
       "RemoteRef": "1037991efe91d439570a76076c84bfeff121e0a6",
       "RemoteSha": "1037991efe91d439570a76076c84bfeff121e0a6",
-      "Hash": "6d9abc9e464b3d6b3078b6b0778f5763"
+      "Hash": "1d09add18e98828ea4060a8c60f495cf"
     },
     "SingleCellExperiment": {
       "Package": "SingleCellExperiment",
@@ -262,6 +295,13 @@
       "Source": "Bioconductor",
       "Hash": "1f4c0859b8f338bd9f8c0b7967e719a3"
     },
+    "XML": {
+      "Package": "XML",
+      "Version": "3.99-0.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "c1616606f097075542c12fb8a10a071e"
+    },
     "XVector": {
       "Package": "XVector",
       "Version": "0.26.0",
@@ -274,6 +314,12 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "4f57884290cc75ab22f4af9e9d4ca862"
+    },
+    "annotate": {
+      "Package": "annotate",
+      "Version": "1.64.0",
+      "Source": "Bioconductor",
+      "Hash": "48b73c5d046919eceb3867df75074b30"
     },
     "askpass": {
       "Package": "askpass",
@@ -365,6 +411,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "f61dbaec772ccd2e17705c1e872e9e7c"
+    },
+    "checkmate": {
+      "Package": "checkmate",
+      "Version": "2.0.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "a667800d5f0350371bedeb8b8b950289"
     },
     "class": {
       "Package": "class",
@@ -632,6 +685,18 @@
       "Repository": "CRAN",
       "Hash": "38f4026c0d09edb3a4474685cef68342"
     },
+    "genefilter": {
+      "Package": "genefilter",
+      "Version": "1.68.0",
+      "Source": "Bioconductor",
+      "Hash": "34fd072f5e71c40b799501f4956f9f77"
+    },
+    "geneplotter": {
+      "Package": "geneplotter",
+      "Version": "1.64.0",
+      "Source": "Bioconductor",
+      "Hash": "47eb16880df2f531689468c4073aebc4"
+    },
     "generics": {
       "Package": "generics",
       "Version": "0.1.0",
@@ -655,8 +720,8 @@
       "Package": "ggrepel",
       "Version": "0.9.0",
       "Source": "GitHub",
-      "RemoteType": "github",
       "Remotes": "github::tidyverse/ggplot2",
+      "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "ggrepel",
       "RemoteUsername": "slowkow",
@@ -788,6 +853,13 @@
       "Repository": "CRAN",
       "Hash": "726671f634529d470545f9fd1a9d1869"
     },
+    "htmlTable": {
+      "Package": "htmlTable",
+      "Version": "2.1.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "4f2a742fc75dedafe660e3b47a37680e"
+    },
     "htmltools": {
       "Package": "htmltools",
       "Version": "0.5.0",
@@ -851,6 +923,13 @@
       "Repository": "CRAN",
       "Hash": "6e58bd3d6b3dd82a944cd6f05ade228f"
     },
+    "jpeg": {
+      "Package": "jpeg",
+      "Version": "0.1-8.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "bc316c003aba520fc73d70ad53b5fc36"
+    },
     "jsonlite": {
       "Package": "jsonlite",
       "Version": "1.7.1",
@@ -906,6 +985,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "fbd9285028b0263d76d18c95ae51a53d"
+    },
+    "latticeExtra": {
+      "Package": "latticeExtra",
+      "Version": "0.6-29",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "590829599d6182cf7461787af34666ee"
     },
     "lazyeval": {
       "Package": "lazyeval",
@@ -983,6 +1069,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "b0edacc02f7a3dad41a1afc385e929f4"
+    },
+    "locfit": {
+      "Package": "locfit",
+      "Version": "1.5-9.4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "760b5b542e8435237d1b3c253bfe18e7"
     },
     "loomR": {
       "Package": "loomR",
@@ -1136,6 +1229,13 @@
       "Repository": "CRAN",
       "Hash": "2737faeee353704efec5afa1e943dd64"
     },
+    "nnet": {
+      "Package": "nnet",
+      "Version": "7.3-14",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "0d87e50e11394a7151a28873637d799a"
+    },
     "openssl": {
       "Package": "openssl",
       "Version": "1.4.3",
@@ -1192,6 +1292,13 @@
       "Repository": "CRAN",
       "Hash": "b6b150cd4709e0c0c9b5d51ac4376282"
     },
+    "plogr": {
+      "Package": "plogr",
+      "Version": "0.2.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "09eb987710984fc2905c7129c7d85e65"
+    },
     "plotly": {
       "Package": "plotly",
       "Version": "4.9.2.1",
@@ -1237,7 +1344,7 @@
       "RemoteUsername": "immunogenomics",
       "RemoteRef": "master",
       "RemoteSha": "7f63f9606953f8ab643809fad6eb4daea7c471d0",
-      "Hash": "631f7e8338134095b4801156234ea9b3"
+      "Hash": "a77d29a4ba190660c675b3942642b157"
     },
     "prettyunits": {
       "Package": "prettyunits",
