@@ -16,6 +16,7 @@ library("reactable")
 library("reticulate")
 library("shinyjs")
 library("presto")
+library("bbplot")
 
 reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 
@@ -1631,27 +1632,38 @@ server <- function(input, output, session){
     })
     
     selected_de <- reactive(getReactableState("de_res_table", "selected"))
+    selected_de_gene <- reactive({
+      isolate(de_res())[selected_de(),]$feature
+    })
     
     ## Violin plot for differential expression
     output$de_volcano_plot <- renderPlot({
       volcano_plot <- ggplot(isolate(de_res()),aes(logFC,-log10(padj))) +
         geom_point() +
-        theme_minimal()
+        bbc_style() +
+        labs(title = "Volcano plot")
+      if(!is.null(selected_de())){
+        volcano_plot <- volcano_plot + 
+          geom_point(data = subset(isolate(de_res()), feature == selected_de_gene()),
+                     size = 5, fill = "red",color=  "black",pch = 21)
+      }
       volcano_plot
     })
     
     ## Correlation plot for differential expression
     output$de_avg_exp_plot <- renderPlot({
-      ggplot(isolate(avg_exp()),aes(group1,group2)) +
-        geom_point(aes(color = significant)) +
+      avg_exp_plot <- ggplot(isolate(avg_exp()),aes(group1,group2)) +
+        geom_point() +
         geom_abline(linetype = 2) +
-        theme_minimal()
+        bbc_style() +
+        labs(title = "Average expression")
+      if(!is.null(selected_de())){
+        avg_exp_plot <- avg_exp_plot + 
+          geom_point(data = subset(isolate(avg_exp()), gene == selected_de_gene()),
+                     size = 5, fill = "red",color=  "black",pch = 21)
+      }
+      avg_exp_plot
     })
-    
-    
-    selected_de_gene <- reactive({
-      de_res()[selected_de(),]$feature
-      })
     
     de_violin_data <- reactive({
 
@@ -1663,7 +1675,7 @@ server <- function(input, output, session){
       
       matrix <- rbind(de_group_1,de_group_2)
       colnames(matrix) <- rvalues$features
-      matrix_sub <- matrix[,isolate(selected_de_gene())]
+      matrix_sub <- matrix[,selected_de_gene()]
       
       ## Create a feature vector for both groups
       feature_vec_1 <- replicate(nrow(de_group_1),group1_name)
@@ -1688,11 +1700,11 @@ server <- function(input, output, session){
         geom_violin() +
         stat_summary(fun=mean, geom="point", size=5, color = "black") +
         scale_fill_manual(values = c("#4682B4","#B47846")) +
-        theme_cowplot() +
+        bbc_style() +
         theme(legend.position = "none") +
         labs(x = "Feature",
              y = "Gene expression",
-             title = isolate(selected_de_gene()))
+             title = selected_de_gene())
     })
     
     

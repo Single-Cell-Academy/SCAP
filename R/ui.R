@@ -516,21 +516,18 @@ library("shinyjs")
         conditionalPanel(condition = 'input.run_de_analysis != 0',
           fluidRow(
             column(width = 8,
-                   h2("Differential expression test results"),
-                   #reactableOutput("de_table_res")
                    reactableOutput("de_res_table"),
                    ),
               column(width = 4,
-                     h2("Violin Plot"),
                      plotOutput("de_violin_plot"))
           ),
+          br(),
+          br(),
           fluidRow(
             column(width = 6,
-                   h2("Volcano plot"),
                    plotOutput("de_volcano_plot")
                    ),
             column(width = 6,
-                   h2("Avg. expression correlation"),
                    plotOutput("de_avg_exp_plot"))
           )
       )
