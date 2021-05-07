@@ -430,6 +430,7 @@ library("shinyjs")
       )
     )
   ),
+  ## Custom metadata panel start
   tabPanel(
     "Custom metadata",
     conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
@@ -485,7 +486,60 @@ library("shinyjs")
         )
       )
     )
-  ),
+  ), 
+  ## Custom metadata panel start
+  tabPanel(
+    "Differential expression",
+    conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
+    conditionalPanel(
+      condition = 'input.assay_1',
+      sidebarPanel(
+        tabsetPanel(
+          id = "custom_meta_tab",
+          tabPanel(
+            value = "main",
+            "Select your groups for differential testing",
+            uiOutput(outputId = 'de_annotation_list'),
+            uiOutput(outputId = 'de_group_1_list'),
+            uiOutput(outputId = 'de_group_2_list'),
+            actionButton(inputId = 'run_de_analysis', label = "Run differential expression!"))
+          ),
+          tabPanel(
+            value = "help",
+            "What can I do on this page?",
+            h4(""),
+          )
+        ),
+      mainPanel(
+        conditionalPanel(condition = 'input.run_de_analysis == 0', h2('Please select your settings for differential expression analysis on the left.', 
+                                                          style = 'text-align: center; font-style: italic;')),
+        conditionalPanel(condition = 'input.run_de_analysis != 0',
+          fluidRow(
+            column(width = 8,
+                   h2("Differential expression test results"),
+                   #reactableOutput("de_table_res")
+                   reactableOutput("de_res_table"),
+                   ),
+              column(width = 4,
+                     h2("Violin Plot"),
+                     plotOutput("de_violin_plot"))
+          ),
+          fluidRow(
+            column(width = 6,
+                   h2("Volcano plot"),
+                   plotOutput("de_volcano_plot")
+                   ),
+            column(width = 6,
+                   h2("Avg. expression correlation"),
+                   plotOutput("de_avg_exp_plot"))
+          )
+      )
+      )
+    )
+  ), 
+  ## Custom metadata panel end  
+  
+  ## Custom metadata panel end  
   #### Scibet panel
   tabPanel(
     "SciBet",
