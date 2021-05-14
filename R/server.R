@@ -954,7 +954,7 @@ server <- function(input, output, session){
       
       merged_colMeans
     })
-    
+      
     output$crispr_avg_gene_exp <- renderPlotly({
       req(merged_crispr_feature_avg_exp())
       avg_exp_plot_plotly <- plot_ly(data = merged_crispr_feature_avg_exp(),
@@ -1613,8 +1613,8 @@ server <- function(input, output, session){
     
     avg_exp <- reactive({
       req(de_res())
-      avg_exp_group1 <- colSums(de_analysis_group1())
-      avg_exp_group2 <- colSums(de_analysis_group2())
+      avg_exp_group1 <- colMeans(de_analysis_group1())
+      avg_exp_group2 <- colMeans(de_analysis_group2())
       avg_exp_df <- data.frame("group1" = avg_exp_group1,
                                "group2" = avg_exp_group2,
                                "gene" = rvalues$features)
@@ -1641,7 +1641,9 @@ server <- function(input, output, session){
       volcano_plot <- ggplot(isolate(de_res()),aes(logFC,-log10(padj))) +
         geom_point() +
         bbc_style() +
-        labs(title = "Volcano plot")
+        labs(title = "Volcano plot",
+             x = "log2FC",
+             y = "-log10(padj)")
       if(!is.null(selected_de())){
         volcano_plot <- volcano_plot + 
           geom_point(data = subset(isolate(de_res()), feature == selected_de_gene()),
@@ -1656,7 +1658,9 @@ server <- function(input, output, session){
         geom_point() +
         geom_abline(linetype = 2) +
         bbc_style() +
-        labs(title = "Average expression")
+        labs(title = "Average expression",
+             x = "Avg. exp. group1",
+             y = "Avg. exp. group2")
       if(!is.null(selected_de())){
         avg_exp_plot <- avg_exp_plot + 
           geom_point(data = subset(isolate(avg_exp()), gene == selected_de_gene()),
