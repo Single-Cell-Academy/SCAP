@@ -312,7 +312,7 @@ library("shinyjs")
         )
       ),
       conditionalPanel(
-        condition = 'input.assay_mod',
+        condition = "input.data_used_mod !== 'Select dataset'",
         fluidRow(
           style='padding:50px;',
           column(
