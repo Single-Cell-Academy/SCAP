@@ -307,12 +307,12 @@ library("shinyjs")
           ),
           column(
             width = 2,
-            selectInput(inputId = "mod_sel", label = "Select Modality Type", choices = c("None", "CRISPR", "CITE-Seq"), selected = "None")
+            selectInput(inputId = "mod_sel", label = "Select Modality Type", choices = c("None", "CRISPR", "CITE-Seq", "Feature Correlation"), selected = "None")
           )
         )
       ),
       conditionalPanel(
-        condition = 'input.assay_mod',
+        condition = "input.data_used_mod !== 'Select dataset'",
         fluidRow(
           style='padding:50px;',
           column(
@@ -426,6 +426,9 @@ library("shinyjs")
               )
             )
           )
+        ),
+        conditionalPanel(
+          condition = "input.mod_sel=='Feature Correlation'"
         )
       )
     )
@@ -663,5 +666,4 @@ library("shinyjs")
   "News",
   includeMarkdown("../news/news.md")
   ), ## end news tabPanel
-  useShinyjs()
-)   # end ui
+  
