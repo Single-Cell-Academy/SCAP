@@ -659,14 +659,12 @@ server <- function(input, output, session){
   })
 
   #-- Display name of data --#
-  output$data_used_mod <- renderText({
-    if(is.null(input$assay_mod) || is.na(input$h5ad_in_mod[[1]][2])){
-      cat(file = stderr(), 'if\n')
-      return('Select dataset')
+  output$data_used_mod <- renderUI({
+    if(is.null(rvalues_mod$h5ad)){
+      h3('Select data')
     }else{
-      cat(file = stderr(), 'else\n')
       path <- sub(".*\\/", "", parseFilePaths(selection = input$h5ad_in_mod, roots = volumes)$datapath)
-      return(paste0("Chosen data: ", path))
+      h3(paste0("Chosen data: ", path))
     }
   })
 
