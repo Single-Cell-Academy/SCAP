@@ -312,7 +312,7 @@ library("shinyjs")
         )
       ),
       conditionalPanel(
-        condition = "input.data_used_mod !== 'Select dataset'",
+        condition = "input.assay_mod !== 'Select dataset'",
         fluidRow(
           style='padding:50px;',
           column(
@@ -428,7 +428,17 @@ library("shinyjs")
           )
         ),
         conditionalPanel(
-          condition = "input.mod_sel=='Feature Correlation'"
+          condition = "input.mod_sel=='Feature Correlation'",
+          sidebarPanel(
+            uiOutput('corr_grouping'),
+            uiOutput('corr_sub_grouping'),
+            uiOutput('corr_fs_1'),
+            uiOutput('corr_fs_2'),
+            htmlOutput('corr_stats')
+          ),
+          mainPanel(
+            plotOutput('corr_plot') %>% withSpinner(color="black", proxy.height = '400px')
+          )
         )
       )
     )
@@ -666,4 +676,5 @@ library("shinyjs")
   "News",
   includeMarkdown("../news/news.md")
   ), ## end news tabPanel
-  
+  useShinyjs()
+)   # end ui                                                                                                
