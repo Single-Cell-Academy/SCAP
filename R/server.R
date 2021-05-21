@@ -75,7 +75,7 @@ server <- function(input, output, session){
     if(length(data) != length(assays)) return(NULL)
     if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <- assays
-    rvalues$features <- rownames(data[[1]]$var)
+    rvalues$features <- data[[1]]$raw$var_names$values
     rvalues$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
     rvalues$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
@@ -255,7 +255,7 @@ server <- function(input, output, session){
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     names(group.by) <- input$grouping_1
     names(group.by[[1]]) <- rvalues$cell_ids
-    feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_1_feature_select, rvalues$features)])
+    feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_1_feature_select, rvalues$features)])
     colnames(feature.in) <- input$featureplot_1_feature_select
     rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
     if(input$nebulosa_on == 'no'){
@@ -299,7 +299,7 @@ server <- function(input, output, session){
     ticks='outside'
     )
     
-    data.features <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$dotplot_1_feature_select, rvalues$features)])
+    data.features <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$dotplot_1_feature_select, rvalues$features)])
     colnames(data.features) <- input$dotplot_1_feature_select
     rownames(data.features) <- rownames(rvalues$reductions)
     data.features$id <- rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE]
@@ -439,7 +439,7 @@ server <- function(input, output, session){
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop=TRUE])
     names(group.by) <- input$grouping_2
     names(group.by[[1]]) <- rvalues$cell_ids
-    feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_2_feature_select, rvalues$features)])
+    feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_2_feature_select, rvalues$features)])
     colnames(feature.in) <- input$featureplot_2_feature_select
     rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_2]])
     featurePlotlyOutput(assay.in = input$assay_2, 
@@ -459,7 +459,7 @@ server <- function(input, output, session){
         req(input$assay_2, rvalues$obs)
         cells <- isolate(rvalues$cells)
 
-        y <- rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop = TRUE]
+        y <- as.character(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop = TRUE])
 
         if(!is.null(cells)){
           cols <- match(cells[,1], rvalues$cell_ids)
@@ -473,10 +473,10 @@ server <- function(input, output, session){
 
         rvalues$h5ad[[1]]$obs['scap_find_markers_groups'] <- reorder_levels(y)
 
-        scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = FALSE)
+        scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = TRUE, method = 'wilcoxon')
 
         t <- rank_genes_groups_df(rvalues$h5ad[[1]])
-        t$group <- py_to_r(attr(t,which='pandas.index')$tolist())
+        t$group <- py_to_r(attr(t, which='pandas.index')$tolist())
         colnames(t) <- c('feature', 'score', 'pval', 'pval_adj', 'logFC', 'group')
         t <- t[,c(1, ncol(t), 2:(ncol(t)-1))]
         if(!is.null(cells)){
@@ -741,7 +741,7 @@ server <- function(input, output, session){
     group.by <- list(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
     names(group.by) <- input$grouping_mod
     names(group.by[[1]]) <- rvalues_mod$cell_ids
-    feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
+    feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$raw$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
     colnames(feature.in) <- input$featureplot_mod_feature_select
     rownames(feature.in) <- rownames(rvalues_mod$reductions[[input$reduction_mod]])
     if(input$nebulosa_mod_on == 'no'){
@@ -770,7 +770,7 @@ server <- function(input, output, session){
   #-- dimensional reduction plot coloured by cell groups --#
   output$ridgeplot_mod <- renderPlot({
     req(input$ridgeplot_mod_feature_select, input$grouping_mod)
-    data.features <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$ridgeplot_mod_feature_select, rvalues_mod$features)])
+    data.features <- as.data.frame(rvalues_mod$h5ad[[1]]$raw$X[,match(input$ridgeplot_mod_feature_select, rvalues_mod$features)])
     colnames(data.features) <- input$ridgeplot_mod_feature_select
     rownames(data.features) <- rownames(rvalues_mod$reductions)
     data.features$id <- as.character(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
@@ -1452,7 +1452,7 @@ server <- function(input, output, session){
     
     for(chunk in names(chunk_list)){
       chunk_no <- chunk_no + 1
-      data_matrix <- rvalues$h5ad[[1]]$X[chunk_list[[chunk]],]
+      data_matrix <- rvalues$h5ad[[1]]$raw$X[chunk_list[[chunk]],]
       #data_matrix <- data[[1]]$X[chunk_list[[chunk]],]
       gene.names <- rvalues$features
       colnames(data_matrix) <- gene.names
