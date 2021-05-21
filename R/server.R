@@ -452,34 +452,34 @@ server <- function(input, output, session){
   #-- Find the markers for the 1) selected cells compared to all other cells or
   #-- 2) the markers that define each group. Depending on if cells are selected or not
   observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-    if(input$find.markers == 0){
+    if(input$find.markers == 0){ # Don't run before button click
       output$markers <- NULL
     }else{
       output$markers <- DT::renderDataTable({
         req(input$assay_2, rvalues$obs)
-        cells <- isolate(rvalues$cells)
+        cells <- isolate(rvalues$cells) # cell ids selected from scatter plots. Isolated so it is only triggered on button click
 
-        y <- as.character(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop = TRUE])
+        y <- as.character(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop = TRUE]) # character vector of cell identities from selected meta data slot
 
-        if(!is.null(cells)){
-          cols <- match(cells[,1], rvalues$cell_ids)
-          y[cols] <- 'Selected'
+        if(!is.null(cells)){ # if cells were selected on the scatter plots
+          cols <- match(cells[,1], rvalues$cell_ids) # get index of selected cell ids from the main object
+          y[cols] <- 'Selected' # rename the identity of the selected cells
         }
 
-        if(length(unique(y))==1){
+        if(length(unique(y))==1){ # need more than 1 cell identity for DE analysis
           showModal(modalDialog(p("Must have at least 2 groups defined to use Find Markers."), title = "Warning"), session = getDefaultReactiveDomain())
           return(NULL)
         }
 
-        rvalues$h5ad[[1]]$obs['scap_find_markers_groups'] <- reorder_levels(y)
+        rvalues$h5ad[[1]]$obs['scap_find_markers_groups'] <- reorder_levels(y) # add cell identities to main object so scanpy methods can be used
 
-        scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = TRUE, method = 'wilcoxon')
+        scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = TRUE, method = 'wilcoxon') # find DEGs
 
-        t <- rank_genes_groups_df(rvalues$h5ad[[1]])
-        t$group <- py_to_r(attr(t, which='pandas.index')$tolist())
+        t <- rank_genes_groups_df(rvalues$h5ad[[1]]) # Create a dataframe of DE results
+        t$group <- py_to_r(attr(t, which='pandas.index')$tolist()) # some crpytic code that's required so an error doesn't occur
         colnames(t) <- c('feature', 'score', 'pval', 'pval_adj', 'logFC', 'group')
         t <- t[,c(1, ncol(t), 2:(ncol(t)-1))]
-        if(!is.null(cells)){
+        if(!is.null(cells)){ # if cells were selected on the scatter plots, only show these cells.
           t <- t[which(t$group == "Selected"),]
         }
         return(t %>% arrange(desc(logFC)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c('score', 'pval', 'pval_adj', 'logFC'), digits=3))
