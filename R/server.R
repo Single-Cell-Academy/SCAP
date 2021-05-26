@@ -75,7 +75,7 @@ server <- function(input, output, session){
     if(length(data) != length(assays)) return(NULL)
     if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <- assays
-    rvalues$features <- data[[1]]$raw$var_names$values
+    rvalues$features <- data[[1]]$raw$var$features
     rvalues$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
     rvalues$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
@@ -620,7 +620,7 @@ server <- function(input, output, session){
     }
 
     names(data) <- assays
-    rvalues_mod$features <- rownames(data[[1]]$var)
+    rvalues_mod$features <- data[[1]]$raw$var$features
     rvalues_mod$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
     rvalues_mod$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
