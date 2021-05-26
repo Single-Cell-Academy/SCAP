@@ -37,8 +37,10 @@ server <- function(input, output, session){
   
   options(shiny.maxRequestSize=500*1024^2)
 
-  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL)
-  rvalues_mod <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL)
+  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL,
+                            raw_dtype = NULL)
+  rvalues_mod <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL,
+                                raw_dtype = NULL)
 
   ## Determine folders for ShinyDir button
   volumes <- c("FTP" = "/ftp", Home = fs::path_home())
@@ -106,6 +108,15 @@ server <- function(input, output, session){
     rvalues$cell_ids <- rownames(data[[1]]$obs)
     rvalues$h5ad <- data
     rvalues$path_to_data <- h5ad_files
+    ## Determine what data is likely stored in .raw
+    if(is.null(data[[1]]$raw)){ ## Check if raw exists
+      rvalues$raw_dtype <- "NULL"
+    }else if(sum(rvalues$h5ad[[1]]$raw$X[1,]) %% 1 == 0){ ## Check whether raw contains un-normalized data or normalized data
+      rvalues$raw_dtype <- "counts"
+    }else{ ## Only if the other two conditions fail, use raw values to calculate differential expression
+      rvalues$raw_dtype <- "normalized"
+    }
+    
     init <<- 0
   })
 
@@ -269,9 +280,9 @@ server <- function(input, output, session){
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     names(group.by) <- input$grouping_1
     names(group.by[[1]]) <- rvalues$cell_ids
-    if(is.null(rvalues$h5ad[[1]]$raw)){
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_1_feature_select, rvalues$features)])
-    }else{
+    }else if(rvalues$raw_dtype == "normalized"){
       feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_1_feature_select, rvalues$features)])
     }
     colnames(feature.in) <- input$featureplot_1_feature_select
@@ -317,9 +328,9 @@ server <- function(input, output, session){
     ticks='outside'
     )
     
-    if(is.null(rvalues$h5ad[[1]]$raw)){
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       data.features <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$dotplot_1_feature_select, rvalues$features)])
-    }else{
+    }else if(rvalues$raw_dtype == "normalized"){
       data.features <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$dotplot_1_feature_select, rvalues$features)])
     }
     colnames(data.features) <- input$dotplot_1_feature_select
@@ -461,9 +472,9 @@ server <- function(input, output, session){
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop=TRUE])
     names(group.by) <- input$grouping_2
     names(group.by[[1]]) <- rvalues$cell_ids
-    if(is.null(rvalues$h5ad[[1]]$raw)){
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_2_feature_select, rvalues$features)])
-    }else{
+    }else if(rvalues$raw_dtype == "normalized"){
       feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_2_feature_select, rvalues$features)])
     }
     colnames(feature.in) <- input$featureplot_2_feature_select
@@ -779,9 +790,9 @@ server <- function(input, output, session){
     group.by <- list(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
     names(group.by) <- input$grouping_mod
     names(group.by[[1]]) <- rvalues_mod$cell_ids
-    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
-    }else{
+    }else if(rvalues_mod$raw_dtype == "normalized"){
       feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$raw$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
     }
     colnames(feature.in) <- input$featureplot_mod_feature_select
@@ -840,9 +851,9 @@ server <- function(input, output, session){
   output$crispr_feature_1_slider <- renderUI({ ## Feature 1 selected for CRISPR
     req(input$assay_mod)
     req(input$crispr_feature_1_sel)
-    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       expr_range <- rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
-    }else{
+    }else if(rvalues_mod$raw_dtype == "normalized"){
       expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
     }
     min_val <- round(min(expr_range),2)
@@ -883,10 +894,10 @@ server <- function(input, output, session){
     req(input$crispr_feature_1_sel)
     req(input$crispr_feature_1_slider_val)
 
-    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
                                              "feature" = input$crispr_feature_1_sel)
-    }else{
+    }else if(rvalues_mod$raw_dtype == "normalized"){
       crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
                                              "feature" = input$crispr_feature_1_sel)
     }
@@ -924,9 +935,9 @@ server <- function(input, output, session){
   output$crispr_feature_2_slider <- renderUI({ ## Feature 1 selected for CRISPR
     req(input$assay_mod)
     req(input$crispr_feature_2_sel)
-    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       expr_range <- rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
-    }else{
+    }else if(rvalues_mod$raw_dtype == "normalized"){
       expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
     }
     min_val <- round(min(expr_range),2)
@@ -944,16 +955,16 @@ server <- function(input, output, session){
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
-    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, 
                                                                                        rvalues_mod$features)],
                                              "feature" = input$crispr_feature_2_sel)
-    }else{
+    }else if(rvalues_mod$raw_dtype == "normalized"){
       crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, 
                                                                                        rvalues_mod$features)],
                                              "feature" = input$crispr_feature_2_sel)
     }
-    
+  
     ggplot(crispr_exp_feature_2_df,aes(exp,fill = feature)) +
       geom_density(fill = "#B47846") +
       theme_cowplot() +
@@ -970,10 +981,10 @@ server <- function(input, output, session){
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
-    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
                                              "feature" = input$crispr_feature_2_sel)
-    }else{
+    }else if(rvalues_mod$raw_dtype == "normalized"){
       crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
                                              "feature" = input$crispr_feature_2_sel)
     }
@@ -1013,13 +1024,14 @@ server <- function(input, output, session){
     crispr_feature_2_cells_rna <- isolate({
       #req(crispr_feature_2_cells())
       pos_cells <- subset(crispr_feature_2_cells(),pass_exp_thr == "yes")
-      if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
         hvg_features <- rownames(rvalues$h5ad[[1]]$var)
         crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
-      }else{
+      }else if(rvalues_mod$raw_dtype == "normalized"){
         hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
         crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
       }
+
       crispr_feature_2_rna_mat
     })
     
@@ -1665,7 +1677,11 @@ server <- function(input, output, session){
     df_annos <- data.frame("anno" = df_annos)
     df_annos$cell_ids <- 1:nrow(df_annos)
     df_cells <- subset(df_annos,anno == input$de_group_1_sel)
-    df_cells_exp_anno <- rvalues$h5ad[[1]]$X[df_cells$cell_ids,] ## uses X, make sure X stores the normalized, not scaled values!
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){ ## Check if raw exists
+      df_cells_exp_anno <- rvalues$h5ad[[1]]$X[df_cells$cell_ids,]
+    }else if(rvalues$raw_dtype == "normalized"){ ## Only if the other two conditions fail, use raw values to calculate differential expression
+      df_cells_exp_anno <- rvalues$h5ad[[1]]$raw$X[df_cells$cell_ids,] 
+    }
     df_cells_exp_anno
   })
   
@@ -1675,7 +1691,11 @@ server <- function(input, output, session){
     df_annos <- data.frame("anno" = df_annos)
     df_annos$cell_ids <- 1:nrow(df_annos)
     df_cells <- subset(df_annos,anno == input$de_group_2_sel)
-    df_cells_exp_anno <- rvalues$h5ad[[1]]$X[df_cells$cell_ids,] ## uses X, make sure X stores the normalized, not scaled values!
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){ ## Check if raw exists
+      df_cells_exp_anno <- rvalues$h5ad[[1]]$X[df_cells$cell_ids,]
+    }else if(rvalues$raw_dtype == "normalized"){ ## Only if the other two conditions fail, use raw values to calculate differential expression
+      df_cells_exp_anno <- rvalues$h5ad[[1]]$raw$X[df_cells$cell_ids,] 
+    }
     df_cells_exp_anno
   })
   
@@ -1683,27 +1703,33 @@ server <- function(input, output, session){
   observeEvent(input$run_de_analysis,{
     
     de_res <- reactive({
+      de_group1 <- isolate(de_analysis_group1())
+      de_group2 <- isolate(de_analysis_group2())
+      
       ## Merge both expression tables
-      matrix_tr <- t(rbind(de_analysis_group1(),de_analysis_group2()))
+      matrix_tr <- t(rbind(de_group1,de_group2))
       rownames(matrix_tr) <- rvalues$features
       
       ## Create a feature vector for both groups
-      feature_vec_1 <- replicate(nrow(de_analysis_group1()),input$de_group_1_sel)
-      feature_vec_2 <- replicate(nrow(de_analysis_group2()),input$de_group_2_sel)
+      feature_vec_1 <- replicate(nrow(de_group1),isolate(input$de_group_1_sel))
+      feature_vec_2 <- replicate(nrow(de_group2),isolate(input$de_group_2_sel))
       feature_vec <- c(feature_vec_1,feature_vec_2)
       
       de_res <- wilcoxauc(matrix_tr, feature_vec)
       de_res <- de_res %>%
         arrange(desc(auc)) %>%
-        subset(group == input$de_group_2_sel) %>%
+        subset(group == isolate(input$de_group_2_sel)) %>%
         dplyr::select(-c(pct_in,pct_out,group,statistic))
+      
       de_res
     })
     
     avg_exp <- reactive({
       req(de_res())
-      avg_exp_group1 <- colMeans(de_analysis_group1())
-      avg_exp_group2 <- colMeans(de_analysis_group2())
+      de_group1 <- isolate(de_analysis_group1())
+      de_group2 <- isolate(de_analysis_group2())
+      avg_exp_group1 <- colMeans(de_group1)
+      avg_exp_group2 <- colMeans(de_group2)
       avg_exp_df <- data.frame("group1" = avg_exp_group1,
                                "group2" = avg_exp_group2,
                                "gene" = rvalues$features)
@@ -1714,7 +1740,9 @@ server <- function(input, output, session){
     })
     
     output$de_res_table <- renderReactable({
-      reactable(isolate(de_res()),
+      de_res_tbl_view <- de_res() 
+      
+      reactable(isolate(de_res_tbl_view),
                 sortable = TRUE,
                 searchable = TRUE,
                 selection = "single")
@@ -1727,15 +1755,21 @@ server <- function(input, output, session){
     
     ## Violin plot for differential expression
     output$de_volcano_plot <- renderPlot({
-      volcano_plot <- ggplot(isolate(de_res()),aes(logFC,-log10(padj))) +
+      req(de_res())
+      de_res_tbl <- de_res() %>%
+        mutate("padj" = if_else(padj == 0,1e-300,padj))
+      
+      volcano_plot <- ggplot(isolate(de_res_tbl),aes(logFC,-log10(padj))) +
         geom_point() +
         bbc_style() +
+        theme(axis.title = element_text(size = 16, face = "bold")) +
         labs(title = "Volcano plot",
              x = "log2FC",
-             y = "-log10(padj)")
+             y = "-log10(padj)") +
+        scale_y_continuous(limits = c(0,max(-log10(de_res_tbl$padj))+ 30))
       if(!is.null(selected_de())){
         volcano_plot <- volcano_plot + 
-          geom_point(data = subset(isolate(de_res()), feature == selected_de_gene()),
+          geom_point(data = subset(isolate(de_res_tbl), feature == selected_de_gene()),
                      size = 5, fill = "red",color=  "black",pch = 21)
       }
       volcano_plot
@@ -1743,13 +1777,17 @@ server <- function(input, output, session){
     
     ## Correlation plot for differential expression
     output$de_avg_exp_plot <- renderPlot({
+      group1_name <- isolate(input$de_group_1_sel)
+      group2_name <- isolate(input$de_group_2_sel)
       avg_exp_plot <- ggplot(isolate(avg_exp()),aes(group1,group2)) +
         geom_point() +
         geom_abline(linetype = 2) +
-        bbc_style() +
         labs(title = "Average expression",
-             x = "Avg. exp. group1",
-             y = "Avg. exp. group2")
+             x = group1_name,
+             y = group2_name) +
+        bbc_style() +
+        theme(axis.title = element_text(size = 16, face = "bold"))
+      
       if(!is.null(selected_de())){
         avg_exp_plot <- avg_exp_plot + 
           geom_point(data = subset(isolate(avg_exp()), gene == selected_de_gene()),
@@ -1794,6 +1832,7 @@ server <- function(input, output, session){
         stat_summary(fun=mean, geom="point", size=5, color = "black") +
         scale_fill_manual(values = c("#4682B4","#B47846")) +
         bbc_style() +
+        theme(axis.title = element_text(size = 16, face = "bold")) +
         theme(legend.position = "none") +
         labs(x = "Feature",
              y = "Gene expression",
