@@ -495,7 +495,6 @@ library("shinyjs")
       condition = 'input.assay_1',
       sidebarPanel(
         tabsetPanel(
-          id = "custom_meta_tab",
           tabPanel(
             value = "main",
             "Select your groups for differential testing",
@@ -507,7 +506,7 @@ library("shinyjs")
           tabPanel(
             value = "help",
             "What can I do on this page?",
-            h4(""),
+            h4("Test"),
           )
         ),
       mainPanel(
