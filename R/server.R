@@ -15,6 +15,8 @@ library("readr")
 library("reactable")
 library("reticulate")
 library("shinyjs")
+library("presto")
+library("bbplot")
 
 reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 
@@ -1037,7 +1039,7 @@ server <- function(input, output, session){
       
       merged_colMeans
     })
-    
+      
     output$crispr_avg_gene_exp <- renderPlotly({
       req(merged_crispr_feature_avg_exp())
       avg_exp_plot_plotly <- plot_ly(data = merged_crispr_feature_avg_exp(),
@@ -1373,7 +1375,8 @@ server <- function(input, output, session){
       inputId = 'comp_anno_2',
       label = 'Select the annotation to compare against!',
       choices = annotation_options,
-      multiple = FALSE)  })
+      multiple = FALSE)  
+    })
 
 
   ## Function to create data table for sankey diagram
@@ -1611,5 +1614,193 @@ server <- function(input, output, session){
     Sys.sleep(1)
     removeModal(session = getDefaultReactiveDomain())
     })
+  
+  #### Differential expression testing elements
+  output$de_annotation_list <- renderUI({
+    req(input$assay_1)
+    req(rvalues$obs)
+    req(rvalues$obs_cat)
+    
+    ## get annotation options from rvalues
+    annotation_options <- rvalues$obs[rvalues$obs_cat]
+    
+    #group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
+    selectInput(
+      inputId = 'de_anno_sel',
+      label = 'Select the annotation you want to use as baseline!',
+      choices = annotation_options,
+      multiple = FALSE)
+  })
+  
+  ## Baseline group for differential expression comparison
+  output$de_group_1_list <- renderUI({
+    req(input$assay_1,input$de_anno_sel)
+    
+    anno_choices <- unique(rvalues$h5ad[[1]]$obs[c(input$de_anno_sel)][,1])
+    
+    selectInput(
+      inputId = 'de_group_1_sel',
+      label = 'Select the annotation to use as baseline!',
+      choices = anno_choices,
+      multiple = FALSE)  
+  })
+  
+  ## Group to compare against for differential expression comparison
+  output$de_group_2_list <- renderUI({
+    req(input$assay_1,input$de_anno_sel, input$de_group_1_sel)
+    
+    anno_choices_2 <- unique(rvalues$h5ad[[1]]$obs[c(input$de_anno_sel)][,1])
+    anno_choices_2 <- setdiff(anno_choices_2,input$de_group_1_sel)
+    
+    selectInput(
+      inputId = 'de_group_2_sel',
+      label = 'Select the annotation to compare with!',
+      choices = anno_choices_2,
+      multiple = FALSE)  
+  })
+  
+  ## Data frame containin expression for cells of DE group1
+  de_analysis_group1 <- reactive({
+    df_annos <- rvalues$h5ad[[1]]$obs[c(input$de_anno_sel)][,1]
+    df_annos <- data.frame("anno" = df_annos)
+    df_annos$cell_ids <- 1:nrow(df_annos)
+    df_cells <- subset(df_annos,anno == input$de_group_1_sel)
+    df_cells_exp_anno <- rvalues$h5ad[[1]]$X[df_cells$cell_ids,] ## uses X, make sure X stores the normalized, not scaled values!
+    df_cells_exp_anno
+  })
+  
+  ## Data frame containing expression for cells of DE group2
+  de_analysis_group2 <- reactive({
+    df_annos <- rvalues$h5ad[[1]]$obs[c(input$de_anno_sel)][,1]
+    df_annos <- data.frame("anno" = df_annos)
+    df_annos$cell_ids <- 1:nrow(df_annos)
+    df_cells <- subset(df_annos,anno == input$de_group_2_sel)
+    df_cells_exp_anno <- rvalues$h5ad[[1]]$X[df_cells$cell_ids,] ## uses X, make sure X stores the normalized, not scaled values!
+    df_cells_exp_anno
+  })
+  
+  ## Event when user clicks button to compare differential expression
+  observeEvent(input$run_de_analysis,{
+    
+    de_res <- reactive({
+      ## Merge both expression tables
+      matrix_tr <- t(rbind(de_analysis_group1(),de_analysis_group2()))
+      rownames(matrix_tr) <- rvalues$features
+      
+      ## Create a feature vector for both groups
+      feature_vec_1 <- replicate(nrow(de_analysis_group1()),input$de_group_1_sel)
+      feature_vec_2 <- replicate(nrow(de_analysis_group2()),input$de_group_2_sel)
+      feature_vec <- c(feature_vec_1,feature_vec_2)
+      
+      de_res <- wilcoxauc(matrix_tr, feature_vec)
+      de_res <- de_res %>%
+        arrange(desc(auc)) %>%
+        subset(group == input$de_group_2_sel) %>%
+        dplyr::select(-c(pct_in,pct_out,group,statistic))
+      de_res
+    })
+    
+    avg_exp <- reactive({
+      req(de_res())
+      avg_exp_group1 <- colMeans(de_analysis_group1())
+      avg_exp_group2 <- colMeans(de_analysis_group2())
+      avg_exp_df <- data.frame("group1" = avg_exp_group1,
+                               "group2" = avg_exp_group2,
+                               "gene" = rvalues$features)
+
+      avg_exp_df <- avg_exp_df %>%
+        mutate("significant" = if_else(gene %in% subset(de_res(),padj < 0.05)$feature,"yes","no"))
+      avg_exp_df
+    })
+    
+    output$de_res_table <- renderReactable({
+      reactable(isolate(de_res()),
+                sortable = TRUE,
+                searchable = TRUE,
+                selection = "single")
+    })
+    
+    selected_de <- reactive(getReactableState("de_res_table", "selected"))
+    selected_de_gene <- reactive({
+      isolate(de_res())[selected_de(),]$feature
+    })
+    
+    ## Violin plot for differential expression
+    output$de_volcano_plot <- renderPlot({
+      volcano_plot <- ggplot(isolate(de_res()),aes(logFC,-log10(padj))) +
+        geom_point() +
+        bbc_style() +
+        labs(title = "Volcano plot",
+             x = "log2FC",
+             y = "-log10(padj)")
+      if(!is.null(selected_de())){
+        volcano_plot <- volcano_plot + 
+          geom_point(data = subset(isolate(de_res()), feature == selected_de_gene()),
+                     size = 5, fill = "red",color=  "black",pch = 21)
+      }
+      volcano_plot
+    })
+    
+    ## Correlation plot for differential expression
+    output$de_avg_exp_plot <- renderPlot({
+      avg_exp_plot <- ggplot(isolate(avg_exp()),aes(group1,group2)) +
+        geom_point() +
+        geom_abline(linetype = 2) +
+        bbc_style() +
+        labs(title = "Average expression",
+             x = "Avg. exp. group1",
+             y = "Avg. exp. group2")
+      if(!is.null(selected_de())){
+        avg_exp_plot <- avg_exp_plot + 
+          geom_point(data = subset(isolate(avg_exp()), gene == selected_de_gene()),
+                     size = 5, fill = "red",color=  "black",pch = 21)
+      }
+      avg_exp_plot
+    })
+    
+    de_violin_data <- reactive({
+
+      ## Merge both expression tables
+      de_group_1 <- isolate(de_analysis_group1())
+      group1_name <- isolate(input$de_group_1_sel)
+      de_group_2 <- isolate(de_analysis_group2())
+      group2_name <- isolate(input$de_group_2_sel)
+      
+      matrix <- rbind(de_group_1,de_group_2)
+      colnames(matrix) <- rvalues$features
+      matrix_sub <- matrix[,selected_de_gene()]
+      
+      ## Create a feature vector for both groups
+      feature_vec_1 <- replicate(nrow(de_group_1),group1_name)
+      feature_vec_2 <- replicate(nrow(de_group_2),group2_name)
+      feature_vec <- c(feature_vec_1,feature_vec_2)
+      
+      final_df <- data.frame("exp" = matrix_sub,
+                             "group" = feature_vec)
+      
+      ## set order of the two groups, such that group1 is always first
+      final_df$group <- factor(final_df$group,
+                               levels = c(group1_name,group2_name))
+        
+      final_df
+    })
+    
+
+    ## Correlation plot for differential expression
+    output$de_violin_plot <- renderPlot({
+      req(selected_de_gene())
+      ggplot(isolate(de_violin_data()),aes(group,exp, fill = group)) +
+        geom_violin() +
+        stat_summary(fun=mean, geom="point", size=5, color = "black") +
+        scale_fill_manual(values = c("#4682B4","#B47846")) +
+        bbc_style() +
+        theme(legend.position = "none") +
+        labs(x = "Feature",
+             y = "Gene expression",
+             title = selected_de_gene())
+    })
+    
+    
+  })
   
 } # server end
