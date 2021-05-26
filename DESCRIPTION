@@ -1,35 +1,18 @@
 Package: SCAP
 Title: Single Cell Analysis Portal
-Version: 0.0.0.9000
-Authors@R: person("Joel", "Howard", email = "joel.p.howard@egmail.com", role = c("aut", "cre"))
+Version: 0.1.0
+Authors@R: 
+  c(person(given = "Florian",
+           family = "Wuennemann",
+           role = c("aut", "cre"),
+           email = "flowuenne@gmail.com"),
+    person(given = "Joel",
+           family = "Howard",
+           role = c("aut", "cre"))
+           )
 Description: What the package does (one paragraph).
-Depends: R (>= 3.6.0)
+Depends: R (>= 4.0.4)
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-Imports: 
-  BiocManager,
-	cowplot,
-	devtools,
-	dplyr,
-	ggplot2,
-	ggthemes,
-	gtools,
-	hdf5r,
-	loomR,
-	Matrix,
-	MODIS,
-	plotly,
-	presto,
-	Seurat,
-	shiny,
-	shinycssloaders,
-	shinyFiles,
-	shinyjqui,
-	shinyjs,
-	shinythemes
-Remotes:
-  andrewsali/shinycssloaders,
-  immunogenomics/presto,
-  mojaveazure/loomR@develop
 RoxygenNote: 6.1.1
