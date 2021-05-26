@@ -54,7 +54,7 @@ server <- function(input, output, session){
   ## File directory
   shinyFileChoose(input, "h5ad_in", roots = volumes, session = session)
   
-  # connect to .h5ad files in chosen dir
+  # connect chosen .h5ad file
   observeEvent(input$h5ad_in, {
     path <- parseFilePaths(selection = input$h5ad_in, roots = volumes)$datapath
     if(is.integer(path[1]) || identical(path, character(0)) || identical(path, character(0))) return(NULL)
@@ -75,7 +75,12 @@ server <- function(input, output, session){
     if(length(data) != length(assays)) return(NULL)
     if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <- assays
-    rvalues$features <- data[[1]]$raw$var$features
+    ## Check if RAW Anndata object is present or not. If not present, use the main object
+    if(is.null(data[[1]]$raw)){ 
+      rvalues$features <- rownames(data[[1]]$var)
+    }else{
+      rvalues$features <- data[[1]]$raw$var[,1]
+    }
     rvalues$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
     rvalues$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
@@ -255,7 +260,11 @@ server <- function(input, output, session){
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     names(group.by) <- input$grouping_1
     names(group.by[[1]]) <- rvalues$cell_ids
-    feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_1_feature_select, rvalues$features)])
+    if(is.null(rvalues$h5ad[[1]]$raw)){
+      feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_1_feature_select, rvalues$features)])
+    }else{
+      feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_1_feature_select, rvalues$features)])
+    }
     colnames(feature.in) <- input$featureplot_1_feature_select
     rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
     if(input$nebulosa_on == 'no'){
@@ -299,7 +308,11 @@ server <- function(input, output, session){
     ticks='outside'
     )
     
-    data.features <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$dotplot_1_feature_select, rvalues$features)])
+    if(is.null(rvalues$h5ad[[1]]$raw)){
+      data.features <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$dotplot_1_feature_select, rvalues$features)])
+    }else{
+      data.features <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$dotplot_1_feature_select, rvalues$features)])
+    }
     colnames(data.features) <- input$dotplot_1_feature_select
     rownames(data.features) <- rownames(rvalues$reductions)
     data.features$id <- rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE]
@@ -439,7 +452,11 @@ server <- function(input, output, session){
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop=TRUE])
     names(group.by) <- input$grouping_2
     names(group.by[[1]]) <- rvalues$cell_ids
-    feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_2_feature_select, rvalues$features)])
+    if(is.null(rvalues$h5ad[[1]]$raw)){
+      feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_2_feature_select, rvalues$features)])
+    }else{
+      feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_2_feature_select, rvalues$features)])
+    }
     colnames(feature.in) <- input$featureplot_2_feature_select
     rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_2]])
     featurePlotlyOutput(assay.in = input$assay_2, 
@@ -620,7 +637,12 @@ server <- function(input, output, session){
     }
 
     names(data) <- assays
-    rvalues_mod$features <- data[[1]]$raw$var$features
+    
+    if(is.null(data[[1]]$raw$var)){
+      rvalues_mod$features <- rownames(data[[1]]$var)
+    }else{
+      rvalues_mod$features <- data[[1]]$raw$var[,1]
+    }
     rvalues_mod$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
     rvalues_mod$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
@@ -741,7 +763,11 @@ server <- function(input, output, session){
     group.by <- list(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
     names(group.by) <- input$grouping_mod
     names(group.by[[1]]) <- rvalues_mod$cell_ids
-    feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$raw$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
+    }else{
+      feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$raw$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
+    }
     colnames(feature.in) <- input$featureplot_mod_feature_select
     rownames(feature.in) <- rownames(rvalues_mod$reductions[[input$reduction_mod]])
     if(input$nebulosa_mod_on == 'no'){
@@ -770,7 +796,11 @@ server <- function(input, output, session){
   #-- dimensional reduction plot coloured by cell groups --#
   output$ridgeplot_mod <- renderPlot({
     req(input$ridgeplot_mod_feature_select, input$grouping_mod)
-    data.features <- as.data.frame(rvalues_mod$h5ad[[1]]$raw$X[,match(input$ridgeplot_mod_feature_select, rvalues_mod$features)])
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      data.features <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$ridgeplot_mod_feature_select, rvalues_mod$features)])
+    }else{
+      data.features <- as.data.frame(rvalues_mod$h5ad[[1]]$raw$X[,match(input$ridgeplot_mod_feature_select, rvalues_mod$features)])
+    }
     colnames(data.features) <- input$ridgeplot_mod_feature_select
     rownames(data.features) <- rownames(rvalues_mod$reductions)
     data.features$id <- as.character(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
@@ -794,7 +824,11 @@ server <- function(input, output, session){
   output$crispr_feature_1_slider <- renderUI({ ## Feature 1 selected for CRISPR
     req(input$assay_mod)
     req(input$crispr_feature_1_sel)
-    expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      expr_range <- rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
+    }else{
+      expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
+    }
     min_val <- round(min(expr_range),2)
     max_val <- round(max(expr_range),2)
     sel_value <- median((expr_range))
@@ -810,8 +844,13 @@ server <- function(input, output, session){
     req(input$crispr_feature_1_sel)
     req(input$crispr_feature_1_slider_val)
     
-    crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
-                                           "feature" = input$crispr_feature_1_sel)
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_1_sel)
+    }else{
+      crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_1_sel)
+    }
 
     ggplot(crispr_exp_feature_1_df,aes(exp,fill = feature)) +
       geom_density(fill = "#4682B4") +
@@ -828,8 +867,14 @@ server <- function(input, output, session){
     req(input$crispr_feature_1_sel)
     req(input$crispr_feature_1_slider_val)
 
-    crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
-                                           "feature" = input$crispr_feature_1_sel)
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_1_sel)
+    }else{
+      crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_1_sel)
+    }
+
     crispr_exp_feature_1_df <- crispr_exp_feature_1_df %>%
       mutate("pass_exp_thr" = if_else(exp >= input$crispr_feature_1_slider_val,"yes","no"),
              "index" = rownames(crispr_exp_feature_1_df))
@@ -863,7 +908,11 @@ server <- function(input, output, session){
   output$crispr_feature_2_slider <- renderUI({ ## Feature 1 selected for CRISPR
     req(input$assay_mod)
     req(input$crispr_feature_2_sel)
-    expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      expr_range <- rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
+    }else{
+      expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
+    }
     min_val <- round(min(expr_range),2)
     max_val <- round(max(expr_range),2)
     sel_value <- median(expr_range)
@@ -879,9 +928,15 @@ server <- function(input, output, session){
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
-    crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, 
-                                                                                     rvalues_mod$features)],
-                                           "feature" = input$crispr_feature_2_sel)
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, 
+                                                                                       rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_2_sel)
+    }else{
+      crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, 
+                                                                                       rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_2_sel)
+    }
     
     ggplot(crispr_exp_feature_2_df,aes(exp,fill = feature)) +
       geom_density(fill = "#B47846") +
@@ -899,8 +954,14 @@ server <- function(input, output, session){
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
-    crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
-                                           "feature" = input$crispr_feature_2_sel)
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_2_sel)
+    }else{
+      crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_2_sel)
+    }
+
     crispr_exp_feature_2_df <- crispr_exp_feature_2_df %>%
       mutate("pass_exp_thr" = if_else(exp >= input$crispr_feature_2_slider_val,"yes","no"),
              "index" = rownames(crispr_exp_feature_2_df))
@@ -923,16 +984,26 @@ server <- function(input, output, session){
     crispr_feature_1_cells_rna <- isolate({
       #req(crispr_feature_1_cells())
       pos_cells <- subset(crispr_feature_1_cells(),pass_exp_thr == "yes")
-      hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
-      crispr_feature_1_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+        hvg_features <- rownames(rvalues$h5ad[[1]]$var)
+        crispr_feature_1_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      }else{
+        hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
+        crispr_feature_1_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      }
       crispr_feature_1_rna_mat
     })
     
     crispr_feature_2_cells_rna <- isolate({
       #req(crispr_feature_2_cells())
       pos_cells <- subset(crispr_feature_2_cells(),pass_exp_thr == "yes")
-      hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
-      crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+        hvg_features <- rownames(rvalues$h5ad[[1]]$var)
+        crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      }else{
+        hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
+        crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      }
       crispr_feature_2_rna_mat
     })
     
@@ -1452,7 +1523,11 @@ server <- function(input, output, session){
     
     for(chunk in names(chunk_list)){
       chunk_no <- chunk_no + 1
-      data_matrix <- rvalues$h5ad[[1]]$raw$X[chunk_list[[chunk]],]
+      if(is.null(rvalues$h5ad[[1]]$raw)){
+        data_matrix <- rvalues$h5ad[[1]]$X[chunk_list[[chunk]],]
+      }else{
+        data_matrix <- rvalues$h5ad[[1]]$raw$X[chunk_list[[chunk]],]
+      }
       #data_matrix <- data[[1]]$X[chunk_list[[chunk]],]
       gene.names <- rvalues$features
       colnames(data_matrix) <- gene.names
