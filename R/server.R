@@ -79,7 +79,14 @@ server <- function(input, output, session){
     if(is.null(data[[1]]$raw)){ 
       rvalues$features <- rownames(data[[1]]$var)
     }else{
-      rvalues$features <- data[[1]]$raw$var[,1]
+      test_gene_name <- rownames(data[[1]]$var)[1]
+      if(test_gene_name %in% rownames(data[[1]]$raw$var)){ # check if rownames are numbers or gene names
+        rvalues$features <- rownames(data[[1]]$raw$var)
+      }else if("features" %in% colnames(data[[1]]$raw$var)){ ## Check if there is a column named features in raw
+        rvalues$features <- data[[1]]$raw$var$features
+      }else if(test_gene_name %in% data[[1]]$raw$var[,1]){ # otherwise, check if the first column contains rownames
+        rvalues$features <- data[[1]]$raw$var[,1]
+      }
     }
     rvalues$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
@@ -641,7 +648,14 @@ server <- function(input, output, session){
     if(is.null(data[[1]]$raw$var)){
       rvalues_mod$features <- rownames(data[[1]]$var)
     }else{
-      rvalues_mod$features <- data[[1]]$raw$var[,1]
+      test_gene_name <- rownames(data[[1]]$var)[1]
+      if(test_gene_name %in% rownames(data[[1]]$raw$var)){ # check if rownames are numbers or gene names
+        rvalues_mod$features <- rownames(data[[1]]$raw$var)
+      }else if("features" %in% colnames(data[[1]]$raw$var)){ ## Check if there is a column named features in raw
+        rvalues_mod$features <- data[[1]]$raw$var$features
+      }else if(test_gene_name %in% data[[1]]$raw$var[,1]){ # otherwise, check if the first column contains rownames
+        rvalues_mod$features <- data[[1]]$raw$var[,1]
+      }
     }
     rvalues_mod$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
