@@ -1639,7 +1639,7 @@ server <- function(input, output, session){
     #group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     selectInput(
       inputId = 'de_anno_sel',
-      label = 'Select the annotation you want to use as baseline!',
+      label = 'Select the observations you want to compare!',
       choices = annotation_options,
       multiple = FALSE)
   })
@@ -1666,7 +1666,7 @@ server <- function(input, output, session){
     
     selectInput(
       inputId = 'de_group_2_sel',
-      label = 'Select the annotation to compare with!',
+      label = 'Select the annotation to compare against!',
       choices = anno_choices_2,
       multiple = FALSE)  
   })

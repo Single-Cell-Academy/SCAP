@@ -497,16 +497,25 @@ library("shinyjs")
         tabsetPanel(
           tabPanel(
             value = "main",
-            "Select your groups for differential testing",
+            "DE testing",
+            br(),
             uiOutput(outputId = 'de_annotation_list'),
             uiOutput(outputId = 'de_group_1_list'),
             uiOutput(outputId = 'de_group_2_list'),
-            actionButton(inputId = 'run_de_analysis', label = "Run differential expression!"))
-          ),
+            actionButton(inputId = 'run_de_analysis', label = "Run differential expression!")),
           tabPanel(
             value = "help",
             "What can I do on this page?",
-            h4("Test"),
+            br(),
+            p("On this page you can perform a simple differential expression analysis between two groups of cells. First, chose the observations
+               that you want to compare. If you require grouping of multiple observations for comparison, you can add these via custom metadata. Then,
+               select the two groups of cells you would like to compare and click run differential expression."),
+            br(),
+            p("The differential expression analysis implemented here will use the wilcoxauc() function from the presto package. Please note, that while
+            this approach generally reveals strong effects, this is a very simple way to perform differential expression analysis, that does not take into account any information on technical or 
+            biological replicates and can therefore have inflated statistics. To run more precise differential expression models, please consider
+              approaches outside of SCAP.")
+            )
           )
         ),
       mainPanel(
@@ -710,8 +719,8 @@ library("shinyjs")
     )
   ),
   tabPanel(
-  "News",
-  includeMarkdown("../news/news.md")
+  "Changelog",
+  includeMarkdown("../changelog/changelog.md")
   ), ## end news tabPanel
   useShinyjs()
 )   # end ui

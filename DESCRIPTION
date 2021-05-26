@@ -10,7 +10,7 @@ Authors@R:
            family = "Howard",
            role = c("aut", "cre"))
            )
-Description: What the package does (one paragraph).
+Description: An Rshiny portal for analysis of scRNA-seq data
 Depends: R (>= 4.0.4)
 License: MIT + file LICENSE
 Encoding: UTF-8
