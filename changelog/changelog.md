@@ -2,6 +2,13 @@
 
 We have added this News tab to the SCAP app. Come back here to find the newest updates and functions we have implemented into SCAP!
 
+## **2021-05-26 : Major update to version 0.1.0**
+
+In this update, we have implemented a number of new features:
+* Differential expression calculation between groups
+* Enabled loading of .h5ad files for additional modalities alongside RNA
+* Internal upgrade from R version 3.6 to 4.0.4
+
 ## **2021-03-25 : New data format**
 
 We have completely modified the input format used by SCAP. Instead of using custom loom files, SCAP now uses h5ad formatted files, similar to cellxgene. This means that the data used as input for SCAP can seamlessly be imported into cellxgene as well. We made this decision in an effort for easier compatibility of SCAP analysis with other tools. If you have an existing loom file from previous analysis, you first have to transform this into an h5ad file using the File conversion tab.
