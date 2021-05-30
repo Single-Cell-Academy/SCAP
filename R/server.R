@@ -1006,7 +1006,8 @@ server <- function(input, output, session){
   })
 
   output$corr_grouping <- renderUI({
-    req(rvalues_mod$obs)
+    req(rvalues_mod$obs,input$assay_mod)
+    assay <- input$assay_mod
     options <- rvalues_mod$obs
     if(any(grepl("seurat_clusters", options, ignore.case = FALSE))){
       sel <- rvalues$obs[grep("seurat_clusters", options)]
