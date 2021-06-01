@@ -1104,6 +1104,124 @@ server <- function(input, output, session){
     
   })
 
+  output$corr_grouping <- renderUI({
+    req(rvalues_mod$obs,input$assay_mod)
+    assay <- input$assay_mod
+    options <- rvalues_mod$obs
+    if(any(grepl("seurat_clusters", options, ignore.case = FALSE))){
+      sel <- rvalues$obs[grep("seurat_clusters", options)]
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"), options, ignore.case = TRUE))){
+      sel <- paste0(tolower(assay),"_clusters")
+    }else{
+      sel <- options[1]
+    }
+    selectInput(inputId = 'corr_grouping', label = 'Group By', choices = options, selected = sel, multiple = FALSE)
+  })
+
+  output$corr_sub_grouping <- renderUI({
+    req(input$corr_grouping)
+    if(rvalues$obs_cat[which(rvalues$obs == input$corr_grouping)]){
+      options <- c('All Options', levels(reorder_levels(rvalues$h5ad[[1]]$obs[[input$corr_grouping]])))
+      selectInput(inputId = 'corr_sub_grouping', label = 'Show', choices = options, selected = options[1], multiple = FALSE)
+    }else{
+      sliderInput(inputId = 'corr_sub_grouping', label = 'Show', min = min(rvalues$h5ad[[1]]$obs[[input$corr_grouping]]), max = max(rvalues$h5ad[[1]]$obs[[input$corr_grouping]]), value = c(min(rvalues$h5ad[[1]]$obs[[input$corr_grouping]]), max(rvalues$h5ad[[1]]$obs[[input$corr_grouping]])))
+    }
+  })
+
+  corr_df <- reactive({
+    req(input$corr_fs_1, input$corr_fs_2, input$corr_grouping)
+
+    df <- data.frame(x = rvalues$h5ad[[1]]$X[,which(rvalues$features == input$corr_fs_1), drop = TRUE], 
+                    y = rvalues_mod$h5ad[[1]]$X[,which(rvalues_mod$features == input$corr_fs_2), drop = TRUE],
+                    group = rvalues$h5ad[[1]]$obs[[input$corr_grouping]],
+                    stringsAsFactors = FALSE
+    )
+
+    # add color pal
+    if(rvalues$obs_cat[which(rvalues$obs == input$corr_grouping)]){
+      df$col <- 'black'
+      df$group <- reorder_levels(df$group)
+      for(i in 1:length(levels(df$group))){
+        df$col[which(df$group == levels(df$group)[i])] <- COLORPAL_DISCRETE[i]
+      }
+    }else{
+      df <- df[order(df$group),]
+      df$col <- COLORPAL_CONTINUOUS(nrow(df))
+    }
+    if(rvalues$obs_cat[which(rvalues$obs == input$corr_grouping)]){
+      cat <- 1
+    }else{
+      cat <- 0
+    }
+
+    return(list(df = df, cat = cat))
+  })
+
+  corr_sub_df <- reactive({
+    req(input$corr_sub_grouping)
+    if(corr_df()$cat){
+      if(identical(input$corr_sub_grouping, "All Options") == FALSE){
+        df <- corr_df()$df[which(corr_df()$df$group %in% input$corr_sub_grouping),]
+      }else{
+        df <- corr_df()$df
+      }
+    }else{
+      df <- corr_df()$df[which(corr_df()$df$group >= input$corr_sub_grouping[1] & corr_df()$df$group <= input$corr_sub_grouping[2]),]
+    }
+
+    flag <- (length(unique(df$x)) == 1 | length(unique(df$y)) == 1)
+    if(flag){
+      fit <- NULL
+    }else{
+      fit <- summary(lm(y~x, df))
+    }
+    return(list(df = df, fit = fit))
+  })
+
+  output$corr_fs_1 <- renderUI({
+    req(input$assay_1)
+    assay <- input$assay_1
+    selectInput(inputId = 'corr_fs_1', 
+                label = paste0('Select Feature 1 from ', assay), 
+                choices = rvalues$features, 
+                selected = rvalues$features[1], 
+                multiple = FALSE)
+  })
+
+  output$corr_fs_2 <- renderUI({
+    req(input$assay_mod)
+    assay <- input$assay_mod
+    selectInput(inputId = 'corr_fs_2', 
+                label = paste0('Select Feature 2 from ', assay), 
+                choices = rvalues_mod$features, 
+                selected = rvalues_mod$features[1], 
+                multiple = FALSE)
+  })
+
+  output$corr_plot <- renderPlot({
+    req(corr_sub_df())
+    p <- ggplot(data = corr_sub_df()$df, mapping = aes(x = x, y = y)) + 
+      geom_point(color = corr_sub_df()$df$col) + 
+      xlab(input$corr_fs_1) + 
+      ylab(input$corr_fs_2) +
+      theme_base() + 
+      theme(plot.background = element_blank())
+    if(is.null(corr_sub_df()$fit) == FALSE){
+      p <- p + geom_abline(slope = corr_sub_df()$fit$coefficients[2,1], intercept = corr_sub_df()$fit$coefficients[1,1], color = "red")
+    }
+    return(p)
+  })
+
+  output$corr_stats <- renderUI({
+    req(corr_sub_df())
+    if(is.null(corr_sub_df()$fit)){
+      HTML("One or more of the selected features has constant expression.")
+    }else{
+      HTML(paste(c(paste('slope:', round(corr_sub_df()$fit$coefficients[2,1],4)), paste('intercept:', round(corr_sub_df()$fit$coefficients[1,1],4)), paste('R2:', round(corr_sub_df()$fit$r.squared,4))), collapse = "<br/>"))
+    }
+  })
+
+
   ###==============// CUSTOM META DATA TAB //==============####
 
   #-- select input for Assay --#

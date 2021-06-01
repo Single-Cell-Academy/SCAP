@@ -307,12 +307,12 @@ library("shinyjs")
           ),
           column(
             width = 2,
-            selectInput(inputId = "mod_sel", label = "Select Modality Type", choices = c("None", "CRISPR", "CITE-Seq"), selected = "None")
+            selectInput(inputId = "mod_sel", label = "Select Modality Type", choices = c("None", "CRISPR", "CITE-Seq", "Feature Correlation"), selected = "None")
           )
         )
       ),
       conditionalPanel(
-        condition = 'input.assay_mod',
+        condition = "input.assay_mod !== 'Select dataset'",
         fluidRow(
           style='padding:50px;',
           column(
@@ -425,6 +425,19 @@ library("shinyjs")
                        )
               )
             )
+          )
+        ),
+        conditionalPanel(
+          condition = "input.mod_sel=='Feature Correlation'",
+          sidebarPanel(
+            uiOutput('corr_grouping'),
+            uiOutput('corr_sub_grouping'),
+            uiOutput('corr_fs_1'),
+            uiOutput('corr_fs_2'),
+            htmlOutput('corr_stats')
+          ),
+          mainPanel(
+            plotOutput('corr_plot') %>% withSpinner(color="black", proxy.height = '400px')
           )
         )
       )
@@ -723,4 +736,4 @@ library("shinyjs")
   includeMarkdown("../changelog/changelog.md")
   ), ## end news tabPanel
   useShinyjs()
-)   # end ui
+)   # end ui                                                                                                
