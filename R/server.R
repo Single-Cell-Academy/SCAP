@@ -15,6 +15,8 @@ library("readr")
 library("reactable")
 library("reticulate")
 library("shinyjs")
+library("presto")
+library("bbplot")
 
 reticulate::use_virtualenv("../renv/python/virtualenvs/renv-python-3.8.5/")
 
@@ -35,8 +37,10 @@ server <- function(input, output, session){
   
   options(shiny.maxRequestSize=500*1024^2)
 
-  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL)
-  rvalues_mod <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL)
+  rvalues <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL,
+                            raw_dtype = NULL)
+  rvalues_mod <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL,
+                                raw_dtype = NULL)
 
   ## Determine folders for ShinyDir button
   volumes <- c("FTP" = "/ftp", Home = fs::path_home())
@@ -54,7 +58,7 @@ server <- function(input, output, session){
   ## File directory
   shinyFileChoose(input, "h5ad_in", roots = volumes, session = session)
   
-  # connect to .h5ad files in chosen dir
+  # connect chosen .h5ad file
   observeEvent(input$h5ad_in, {
     path <- parseFilePaths(selection = input$h5ad_in, roots = volumes)$datapath
     if(is.integer(path[1]) || identical(path, character(0)) || identical(path, character(0))) return(NULL)
@@ -75,7 +79,19 @@ server <- function(input, output, session){
     if(length(data) != length(assays)) return(NULL)
     if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
     names(data) <- assays
-    rvalues$features <- rownames(data[[1]]$var)
+    ## Check if RAW Anndata object is present or not. If not present, use the main object
+    if(is.null(data[[1]]$raw)){ 
+      rvalues$features <- rownames(data[[1]]$var)
+    }else{
+      test_gene_name <- rownames(data[[1]]$var)[1]
+      if(test_gene_name %in% rownames(data[[1]]$raw$var)){ # check if rownames are numbers or gene names
+        rvalues$features <- rownames(data[[1]]$raw$var)
+      }else if("features" %in% colnames(data[[1]]$raw$var)){ ## Check if there is a column named features in raw
+        rvalues$features <- data[[1]]$raw$var$features
+      }else if(test_gene_name %in% data[[1]]$raw$var[,1]){ # otherwise, check if the first column contains rownames
+        rvalues$features <- data[[1]]$raw$var[,1]
+      }
+    }
     rvalues$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
     rvalues$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
@@ -96,12 +112,21 @@ server <- function(input, output, session){
     rvalues$cell_ids <- rownames(data[[1]]$obs)
     rvalues$h5ad <- data
     rvalues$path_to_data <- h5ad_files
-
+      
     ## unload modality rvalues
     for(i in names(rvalues_mod)){
       rvalues_mod[[i]] <- NULL
     }
-
+      
+    ## Determine what data is likely stored in .raw
+    if(is.null(data[[1]]$raw)){ ## Check if raw exists
+      rvalues$raw_dtype <- "NULL"
+    }else if(sum(rvalues$h5ad[[1]]$raw$X[1,]) %% 1 == 0){ ## Check whether raw contains un-normalized data or normalized data
+      rvalues$raw_dtype <- "counts"
+    }else{ ## Only if the other two conditions fail, use raw values to calculate differential expression
+      rvalues$raw_dtype <- "normalized"
+    }
+      
     init <<- 0
   })
 
@@ -265,7 +290,11 @@ server <- function(input, output, session){
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
     names(group.by) <- input$grouping_1
     names(group.by[[1]]) <- rvalues$cell_ids
-    feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_1_feature_select, rvalues$features)])
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+      feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_1_feature_select, rvalues$features)])
+    }else if(rvalues$raw_dtype == "normalized"){
+      feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_1_feature_select, rvalues$features)])
+    }
     colnames(feature.in) <- input$featureplot_1_feature_select
     rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
     if(input$nebulosa_on == 'no'){
@@ -309,7 +338,11 @@ server <- function(input, output, session){
     ticks='outside'
     )
     
-    data.features <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$dotplot_1_feature_select, rvalues$features)])
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+      data.features <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$dotplot_1_feature_select, rvalues$features)])
+    }else if(rvalues$raw_dtype == "normalized"){
+      data.features <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$dotplot_1_feature_select, rvalues$features)])
+    }
     colnames(data.features) <- input$dotplot_1_feature_select
     rownames(data.features) <- rownames(rvalues$reductions)
     data.features$id <- rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE]
@@ -449,7 +482,11 @@ server <- function(input, output, session){
     group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop=TRUE])
     names(group.by) <- input$grouping_2
     names(group.by[[1]]) <- rvalues$cell_ids
-    feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_2_feature_select, rvalues$features)])
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+      feature.in <- as.data.frame(rvalues$h5ad[[1]]$X[,match(input$featureplot_2_feature_select, rvalues$features)])
+    }else if(rvalues$raw_dtype == "normalized"){
+      feature.in <- as.data.frame(rvalues$h5ad[[1]]$raw$X[,match(input$featureplot_2_feature_select, rvalues$features)])
+    }
     colnames(feature.in) <- input$featureplot_2_feature_select
     rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_2]])
     featurePlotlyOutput(assay.in = input$assay_2, 
@@ -462,34 +499,34 @@ server <- function(input, output, session){
   #-- Find the markers for the 1) selected cells compared to all other cells or
   #-- 2) the markers that define each group. Depending on if cells are selected or not
   observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
-    if(input$find.markers == 0){
+    if(input$find.markers == 0){ # Don't run before button click
       output$markers <- NULL
     }else{
       output$markers <- DT::renderDataTable({
         req(input$assay_2, rvalues$obs)
-        cells <- isolate(rvalues$cells)
+        cells <- isolate(rvalues$cells) # cell ids selected from scatter plots. Isolated so it is only triggered on button click
 
-        y <- rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop = TRUE]
+        y <- as.character(rvalues$h5ad[[1]]$obs[input$grouping_2][,,drop = TRUE]) # character vector of cell identities from selected meta data slot
 
-        if(!is.null(cells)){
-          cols <- match(cells[,1], rvalues$cell_ids)
-          y[cols] <- 'Selected'
+        if(!is.null(cells)){ # if cells were selected on the scatter plots
+          cols <- match(cells[,1], rvalues$cell_ids) # get index of selected cell ids from the main object
+          y[cols] <- 'Selected' # rename the identity of the selected cells
         }
 
-        if(length(unique(y))==1){
+        if(length(unique(y))==1){ # need more than 1 cell identity for DE analysis
           showModal(modalDialog(p("Must have at least 2 groups defined to use Find Markers."), title = "Warning"), session = getDefaultReactiveDomain())
           return(NULL)
         }
 
-        rvalues$h5ad[[1]]$obs['scap_find_markers_groups'] <- reorder_levels(y)
+        rvalues$h5ad[[1]]$obs['scap_find_markers_groups'] <- reorder_levels(y) # add cell identities to main object so scanpy methods can be used
 
-        scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = FALSE)
+        scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = TRUE, method = 'wilcoxon') # find DEGs
 
-        t <- rank_genes_groups_df(rvalues$h5ad[[1]])
-        t$group <- py_to_r(attr(t,which='pandas.index')$tolist())
+        t <- rank_genes_groups_df(rvalues$h5ad[[1]]) # Create a dataframe of DE results
+        t$group <- py_to_r(attr(t, which='pandas.index')$tolist()) # some crpytic code that's required so an error doesn't occur
         colnames(t) <- c('feature', 'score', 'pval', 'pval_adj', 'logFC', 'group')
         t <- t[,c(1, ncol(t), 2:(ncol(t)-1))]
-        if(!is.null(cells)){
+        if(!is.null(cells)){ # if cells were selected on the scatter plots, only show these cells.
           t <- t[which(t$group == "Selected"),]
         }
         return(t %>% arrange(desc(logFC)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c('score', 'pval', 'pval_adj', 'logFC'), digits=3))
@@ -629,7 +666,19 @@ server <- function(input, output, session){
     }
 
     names(data) <- assays
-    rvalues_mod$features <- rownames(data[[1]]$var)
+    
+    if(is.null(data[[1]]$raw$var)){
+      rvalues_mod$features <- rownames(data[[1]]$var)
+    }else{
+      test_gene_name <- rownames(data[[1]]$var)[1]
+      if(test_gene_name %in% rownames(data[[1]]$raw$var)){ # check if rownames are numbers or gene names
+        rvalues_mod$features <- rownames(data[[1]]$raw$var)
+      }else if("features" %in% colnames(data[[1]]$raw$var)){ ## Check if there is a column named features in raw
+        rvalues_mod$features <- data[[1]]$raw$var$features
+      }else if(test_gene_name %in% data[[1]]$raw$var[,1]){ # otherwise, check if the first column contains rownames
+        rvalues_mod$features <- data[[1]]$raw$var[,1]
+      }
+    }
     rvalues_mod$obs <- data[[1]]$obs_keys()
     ## Determine type of annotation and create a layer to annotate for easy usage later on
     rvalues_mod$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
@@ -748,7 +797,11 @@ server <- function(input, output, session){
     group.by <- list(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
     names(group.by) <- input$grouping_mod
     names(group.by[[1]]) <- rvalues_mod$cell_ids
-    feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+      feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
+    }else if(rvalues_mod$raw_dtype == "normalized"){
+      feature.in <- as.data.frame(rvalues_mod$h5ad[[1]]$raw$X[,match(input$featureplot_mod_feature_select, rvalues_mod$features)])
+    }
     colnames(feature.in) <- input$featureplot_mod_feature_select
     rownames(feature.in) <- rownames(rvalues_mod$reductions[[input$reduction_mod]])
     if(input$nebulosa_mod_on == 'no'){
@@ -776,8 +829,12 @@ server <- function(input, output, session){
 
   #-- dimensional reduction plot coloured by cell groups --#
   output$ridgeplot_mod <- renderPlot({
-    req(rvalues_mod$h5ad, input$ridgeplot_mod_feature_select, input$grouping_mod)
-    data.features <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$ridgeplot_mod_feature_select, rvalues_mod$features)])
+    req(input$ridgeplot_mod_feature_select, input$grouping_mod)
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      data.features <- as.data.frame(rvalues_mod$h5ad[[1]]$X[,match(input$ridgeplot_mod_feature_select, rvalues_mod$features)])
+    }else{
+      data.features <- as.data.frame(rvalues_mod$h5ad[[1]]$raw$X[,match(input$ridgeplot_mod_feature_select, rvalues_mod$features)])
+    }
     colnames(data.features) <- input$ridgeplot_mod_feature_select
     rownames(data.features) <- rownames(rvalues_mod$reductions)
     data.features$id <- as.character(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
@@ -801,7 +858,11 @@ server <- function(input, output, session){
   output$crispr_feature_1_slider <- renderUI({ ## Feature 1 selected for CRISPR
     req(rvalues_mod$h5ad, input$assay_mod)
     req(input$crispr_feature_1_sel)
-    expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+      expr_range <- rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
+    }else if(rvalues_mod$raw_dtype == "normalized"){
+      expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
+    }
     min_val <- round(min(expr_range),2)
     max_val <- round(max(expr_range),2)
     sel_value <- median((expr_range))
@@ -817,8 +878,13 @@ server <- function(input, output, session){
     req(input$crispr_feature_1_sel)
     req(input$crispr_feature_1_slider_val)
     
-    crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
-                                           "feature" = input$crispr_feature_1_sel)
+    if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+      crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_1_sel)
+    }else{
+      crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_1_sel)
+    }
 
     ggplot(crispr_exp_feature_1_df,aes(exp,fill = feature)) +
       geom_density(fill = "#4682B4") +
@@ -835,8 +901,14 @@ server <- function(input, output, session){
     req(input$crispr_feature_1_sel)
     req(input$crispr_feature_1_slider_val)
 
-    crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
-                                           "feature" = input$crispr_feature_1_sel)
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+      crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_1_sel)
+    }else if(rvalues_mod$raw_dtype == "normalized"){
+      crispr_exp_feature_1_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_1_sel)
+    }
+
     crispr_exp_feature_1_df <- crispr_exp_feature_1_df %>%
       mutate("pass_exp_thr" = if_else(exp >= input$crispr_feature_1_slider_val,"yes","no"),
              "index" = rownames(crispr_exp_feature_1_df))
@@ -870,7 +942,11 @@ server <- function(input, output, session){
   output$crispr_feature_2_slider <- renderUI({ ## Feature 1 selected for CRISPR
     req(rvalues_mod$h5ad, input$assay_mod)
     req(input$crispr_feature_2_sel)
-    expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+      expr_range <- rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
+    }else if(rvalues_mod$raw_dtype == "normalized"){
+      expr_range <- rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
+    }
     min_val <- round(min(expr_range),2)
     max_val <- round(max(expr_range),2)
     sel_value <- median(expr_range)
@@ -886,10 +962,16 @@ server <- function(input, output, session){
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
-    crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, 
-                                                                                     rvalues_mod$features)],
-                                           "feature" = input$crispr_feature_2_sel)
-    
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+      crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, 
+                                                                                       rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_2_sel)
+    }else if(rvalues_mod$raw_dtype == "normalized"){
+      crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, 
+                                                                                       rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_2_sel)
+    }
+  
     ggplot(crispr_exp_feature_2_df,aes(exp,fill = feature)) +
       geom_density(fill = "#B47846") +
       theme_cowplot() +
@@ -906,8 +988,14 @@ server <- function(input, output, session){
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
-    crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
-                                           "feature" = input$crispr_feature_2_sel)
+    if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+      crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_2_sel)
+    }else if(rvalues_mod$raw_dtype == "normalized"){
+      crispr_exp_feature_2_df <-  data.frame("exp" =rvalues_mod$h5ad[[1]]$raw$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)],
+                                             "feature" = input$crispr_feature_2_sel)
+    }
+
     crispr_exp_feature_2_df <- crispr_exp_feature_2_df %>%
       mutate("pass_exp_thr" = if_else(exp >= input$crispr_feature_2_slider_val,"yes","no"),
              "index" = rownames(crispr_exp_feature_2_df))
@@ -931,16 +1019,27 @@ server <- function(input, output, session){
     crispr_feature_1_cells_rna <- isolate({
       #req(crispr_feature_1_cells())
       pos_cells <- subset(crispr_feature_1_cells(),pass_exp_thr == "yes")
-      hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
-      crispr_feature_1_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      if(is.null(rvalues_mod$h5ad[[1]]$raw)){
+        hvg_features <- rownames(rvalues$h5ad[[1]]$var)
+        crispr_feature_1_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      }else{
+        hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
+        crispr_feature_1_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      }
       crispr_feature_1_rna_mat
     })
     
     crispr_feature_2_cells_rna <- isolate({
       #req(crispr_feature_2_cells())
       pos_cells <- subset(crispr_feature_2_cells(),pass_exp_thr == "yes")
-      hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
-      crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
+        hvg_features <- rownames(rvalues$h5ad[[1]]$var)
+        crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      }else if(rvalues_mod$raw_dtype == "normalized"){
+        hvg_features <- match(rownames(rvalues$h5ad[[1]]$var),rownames(rvalues$h5ad[[1]]$raw$var))
+        crispr_feature_2_rna_mat <- as.data.frame(rvalues$h5ad[[1]]$raw$X[match(pos_cells$cell_id,rvalues$cell_ids),hvg_features])
+      }
+
       crispr_feature_2_rna_mat
     })
     
@@ -960,7 +1059,7 @@ server <- function(input, output, session){
       
       merged_colMeans
     })
-    
+      
     output$crispr_avg_gene_exp <- renderPlotly({
       req(rvalues_mod$h5ad, merged_crispr_feature_avg_exp())
       avg_exp_plot_plotly <- plot_ly(data = merged_crispr_feature_avg_exp(),
@@ -1012,6 +1111,124 @@ server <- function(input, output, session){
     })
     
   })
+
+  output$corr_grouping <- renderUI({
+    req(rvalues_mod$obs,input$assay_mod)
+    assay <- input$assay_mod
+    options <- rvalues_mod$obs
+    if(any(grepl("seurat_clusters", options, ignore.case = FALSE))){
+      sel <- rvalues$obs[grep("seurat_clusters", options)]
+    }else if(any(grepl(paste0(tolower(assay),"_clusters"), options, ignore.case = TRUE))){
+      sel <- paste0(tolower(assay),"_clusters")
+    }else{
+      sel <- options[1]
+    }
+    selectInput(inputId = 'corr_grouping', label = 'Group By', choices = options, selected = sel, multiple = FALSE)
+  })
+
+  output$corr_sub_grouping <- renderUI({
+    req(input$corr_grouping)
+    if(rvalues$obs_cat[which(rvalues$obs == input$corr_grouping)]){
+      options <- c('All Options', levels(reorder_levels(rvalues$h5ad[[1]]$obs[[input$corr_grouping]])))
+      selectInput(inputId = 'corr_sub_grouping', label = 'Show', choices = options, selected = options[1], multiple = FALSE)
+    }else{
+      sliderInput(inputId = 'corr_sub_grouping', label = 'Show', min = min(rvalues$h5ad[[1]]$obs[[input$corr_grouping]]), max = max(rvalues$h5ad[[1]]$obs[[input$corr_grouping]]), value = c(min(rvalues$h5ad[[1]]$obs[[input$corr_grouping]]), max(rvalues$h5ad[[1]]$obs[[input$corr_grouping]])))
+    }
+  })
+
+  corr_df <- reactive({
+    req(input$corr_fs_1, input$corr_fs_2, input$corr_grouping)
+
+    df <- data.frame(x = rvalues$h5ad[[1]]$X[,which(rvalues$features == input$corr_fs_1), drop = TRUE], 
+                    y = rvalues_mod$h5ad[[1]]$X[,which(rvalues_mod$features == input$corr_fs_2), drop = TRUE],
+                    group = rvalues$h5ad[[1]]$obs[[input$corr_grouping]],
+                    stringsAsFactors = FALSE
+    )
+
+    # add color pal
+    if(rvalues$obs_cat[which(rvalues$obs == input$corr_grouping)]){
+      df$col <- 'black'
+      df$group <- reorder_levels(df$group)
+      for(i in 1:length(levels(df$group))){
+        df$col[which(df$group == levels(df$group)[i])] <- COLORPAL_DISCRETE[i]
+      }
+    }else{
+      df <- df[order(df$group),]
+      df$col <- COLORPAL_CONTINUOUS(nrow(df))
+    }
+    if(rvalues$obs_cat[which(rvalues$obs == input$corr_grouping)]){
+      cat <- 1
+    }else{
+      cat <- 0
+    }
+
+    return(list(df = df, cat = cat))
+  })
+
+  corr_sub_df <- reactive({
+    req(input$corr_sub_grouping)
+    if(corr_df()$cat){
+      if(identical(input$corr_sub_grouping, "All Options") == FALSE){
+        df <- corr_df()$df[which(corr_df()$df$group %in% input$corr_sub_grouping),]
+      }else{
+        df <- corr_df()$df
+      }
+    }else{
+      df <- corr_df()$df[which(corr_df()$df$group >= input$corr_sub_grouping[1] & corr_df()$df$group <= input$corr_sub_grouping[2]),]
+    }
+
+    flag <- (length(unique(df$x)) == 1 | length(unique(df$y)) == 1)
+    if(flag){
+      fit <- NULL
+    }else{
+      fit <- summary(lm(y~x, df))
+    }
+    return(list(df = df, fit = fit))
+  })
+
+  output$corr_fs_1 <- renderUI({
+    req(input$assay_1)
+    assay <- input$assay_1
+    selectInput(inputId = 'corr_fs_1', 
+                label = paste0('Select Feature 1 from ', assay), 
+                choices = rvalues$features, 
+                selected = rvalues$features[1], 
+                multiple = FALSE)
+  })
+
+  output$corr_fs_2 <- renderUI({
+    req(input$assay_mod)
+    assay <- input$assay_mod
+    selectInput(inputId = 'corr_fs_2', 
+                label = paste0('Select Feature 2 from ', assay), 
+                choices = rvalues_mod$features, 
+                selected = rvalues_mod$features[1], 
+                multiple = FALSE)
+  })
+
+  output$corr_plot <- renderPlot({
+    req(corr_sub_df())
+    p <- ggplot(data = corr_sub_df()$df, mapping = aes(x = x, y = y)) + 
+      geom_point(color = corr_sub_df()$df$col) + 
+      xlab(input$corr_fs_1) + 
+      ylab(input$corr_fs_2) +
+      theme_base() + 
+      theme(plot.background = element_blank())
+    if(is.null(corr_sub_df()$fit) == FALSE){
+      p <- p + geom_abline(slope = corr_sub_df()$fit$coefficients[2,1], intercept = corr_sub_df()$fit$coefficients[1,1], color = "red")
+    }
+    return(p)
+  })
+
+  output$corr_stats <- renderUI({
+    req(corr_sub_df())
+    if(is.null(corr_sub_df()$fit)){
+      HTML("One or more of the selected features has constant expression.")
+    }else{
+      HTML(paste(c(paste('slope:', round(corr_sub_df()$fit$coefficients[2,1],4)), paste('intercept:', round(corr_sub_df()$fit$coefficients[1,1],4)), paste('R2:', round(corr_sub_df()$fit$r.squared,4))), collapse = "<br/>"))
+    }
+  })
+
 
   ###==============// CUSTOM META DATA TAB //==============####
 
@@ -1296,7 +1513,8 @@ server <- function(input, output, session){
       inputId = 'comp_anno_2',
       label = 'Select the annotation to compare against!',
       choices = annotation_options,
-      multiple = FALSE)  })
+      multiple = FALSE)  
+    })
 
 
   ## Function to create data table for sankey diagram
@@ -1460,7 +1678,11 @@ server <- function(input, output, session){
     
     for(chunk in names(chunk_list)){
       chunk_no <- chunk_no + 1
-      data_matrix <- rvalues$h5ad[[1]]$X[chunk_list[[chunk]],]
+      if(is.null(rvalues$h5ad[[1]]$raw)){
+        data_matrix <- rvalues$h5ad[[1]]$X[chunk_list[[chunk]],]
+      }else{
+        data_matrix <- rvalues$h5ad[[1]]$raw$X[chunk_list[[chunk]],]
+      }
       #data_matrix <- data[[1]]$X[chunk_list[[chunk]],]
       gene.names <- rvalues$features
       colnames(data_matrix) <- gene.names
@@ -1530,5 +1752,220 @@ server <- function(input, output, session){
     Sys.sleep(1)
     removeModal(session = getDefaultReactiveDomain())
     })
+  
+  #### Differential expression testing elements
+  output$de_annotation_list <- renderUI({
+    req(input$assay_1)
+    req(rvalues$obs)
+    req(rvalues$obs_cat)
+    
+    ## get annotation options from rvalues
+    annotation_options <- rvalues$obs[rvalues$obs_cat]
+    
+    #group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
+    selectInput(
+      inputId = 'de_anno_sel',
+      label = 'Select the observations you want to compare!',
+      choices = annotation_options,
+      multiple = FALSE)
+  })
+  
+  ## Baseline group for differential expression comparison
+  output$de_group_1_list <- renderUI({
+    req(input$assay_1,input$de_anno_sel)
+    
+    anno_choices <- unique(rvalues$h5ad[[1]]$obs[c(input$de_anno_sel)][,1])
+    
+    selectInput(
+      inputId = 'de_group_1_sel',
+      label = 'Select the annotation to use as baseline!',
+      choices = anno_choices,
+      multiple = FALSE)  
+  })
+  
+  ## Group to compare against for differential expression comparison
+  output$de_group_2_list <- renderUI({
+    req(input$assay_1,input$de_anno_sel, input$de_group_1_sel)
+    
+    anno_choices_2 <- unique(rvalues$h5ad[[1]]$obs[c(input$de_anno_sel)][,1])
+    anno_choices_2 <- setdiff(anno_choices_2,input$de_group_1_sel)
+    
+    selectInput(
+      inputId = 'de_group_2_sel',
+      label = 'Select the annotation to compare against!',
+      choices = anno_choices_2,
+      multiple = FALSE)  
+  })
+  
+  ## Data frame containin expression for cells of DE group1
+  de_analysis_group1 <- reactive({
+    df_annos <- rvalues$h5ad[[1]]$obs[c(input$de_anno_sel)][,1]
+    df_annos <- data.frame("anno" = df_annos)
+    df_annos$cell_ids <- 1:nrow(df_annos)
+    df_cells <- subset(df_annos,anno == input$de_group_1_sel)
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){ ## Check if raw exists
+      df_cells_exp_anno <- rvalues$h5ad[[1]]$X[df_cells$cell_ids,]
+    }else if(rvalues$raw_dtype == "normalized"){ ## Only if the other two conditions fail, use raw values to calculate differential expression
+      df_cells_exp_anno <- rvalues$h5ad[[1]]$raw$X[df_cells$cell_ids,] 
+    }
+    df_cells_exp_anno
+  })
+  
+  ## Data frame containing expression for cells of DE group2
+  de_analysis_group2 <- reactive({
+    df_annos <- rvalues$h5ad[[1]]$obs[c(input$de_anno_sel)][,1]
+    df_annos <- data.frame("anno" = df_annos)
+    df_annos$cell_ids <- 1:nrow(df_annos)
+    df_cells <- subset(df_annos,anno == input$de_group_2_sel)
+    if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){ ## Check if raw exists
+      df_cells_exp_anno <- rvalues$h5ad[[1]]$X[df_cells$cell_ids,]
+    }else if(rvalues$raw_dtype == "normalized"){ ## Only if the other two conditions fail, use raw values to calculate differential expression
+      df_cells_exp_anno <- rvalues$h5ad[[1]]$raw$X[df_cells$cell_ids,] 
+    }
+    df_cells_exp_anno
+  })
+  
+  ## Event when user clicks button to compare differential expression
+  observeEvent(input$run_de_analysis,{
+    
+    de_res <- reactive({
+      de_group1 <- isolate(de_analysis_group1())
+      de_group2 <- isolate(de_analysis_group2())
+      
+      ## Merge both expression tables
+      matrix_tr <- t(rbind(de_group1,de_group2))
+      rownames(matrix_tr) <- rvalues$features
+      
+      ## Create a feature vector for both groups
+      feature_vec_1 <- replicate(nrow(de_group1),isolate(input$de_group_1_sel))
+      feature_vec_2 <- replicate(nrow(de_group2),isolate(input$de_group_2_sel))
+      feature_vec <- c(feature_vec_1,feature_vec_2)
+      
+      de_res <- wilcoxauc(matrix_tr, feature_vec)
+      de_res <- de_res %>%
+        arrange(desc(auc)) %>%
+        subset(group == isolate(input$de_group_2_sel)) %>%
+        dplyr::select(-c(pct_in,pct_out,group,statistic))
+      
+      de_res
+    })
+    
+    avg_exp <- reactive({
+      req(de_res())
+      de_group1 <- isolate(de_analysis_group1())
+      de_group2 <- isolate(de_analysis_group2())
+      avg_exp_group1 <- colMeans(de_group1)
+      avg_exp_group2 <- colMeans(de_group2)
+      avg_exp_df <- data.frame("group1" = avg_exp_group1,
+                               "group2" = avg_exp_group2,
+                               "gene" = rvalues$features)
+
+      avg_exp_df <- avg_exp_df %>%
+        mutate("significant" = if_else(gene %in% subset(de_res(),padj < 0.05)$feature,"yes","no"))
+      avg_exp_df
+    })
+    
+    output$de_res_table <- renderReactable({
+      de_res_tbl_view <- de_res() 
+      
+      reactable(isolate(de_res_tbl_view),
+                sortable = TRUE,
+                searchable = TRUE,
+                selection = "single")
+    })
+    
+    selected_de <- reactive(getReactableState("de_res_table", "selected"))
+    selected_de_gene <- reactive({
+      isolate(de_res())[selected_de(),]$feature
+    })
+    
+    ## Violin plot for differential expression
+    output$de_volcano_plot <- renderPlot({
+      req(de_res())
+      de_res_tbl <- de_res() %>%
+        mutate("padj" = if_else(padj == 0,1e-300,padj))
+      
+      volcano_plot <- ggplot(isolate(de_res_tbl),aes(logFC,-log10(padj))) +
+        geom_point() +
+        bbc_style() +
+        theme(axis.title = element_text(size = 16, face = "bold")) +
+        labs(title = "Volcano plot",
+             x = "log2FC",
+             y = "-log10(padj)") +
+        scale_y_continuous(limits = c(0,max(-log10(de_res_tbl$padj))+ 30))
+      if(!is.null(selected_de())){
+        volcano_plot <- volcano_plot + 
+          geom_point(data = subset(isolate(de_res_tbl), feature == selected_de_gene()),
+                     size = 5, fill = "red",color=  "black",pch = 21)
+      }
+      volcano_plot
+    })
+    
+    ## Correlation plot for differential expression
+    output$de_avg_exp_plot <- renderPlot({
+      group1_name <- isolate(input$de_group_1_sel)
+      group2_name <- isolate(input$de_group_2_sel)
+      avg_exp_plot <- ggplot(isolate(avg_exp()),aes(group1,group2)) +
+        geom_point() +
+        geom_abline(linetype = 2) +
+        labs(title = "Average expression",
+             x = group1_name,
+             y = group2_name) +
+        bbc_style() +
+        theme(axis.title = element_text(size = 16, face = "bold"))
+      
+      if(!is.null(selected_de())){
+        avg_exp_plot <- avg_exp_plot + 
+          geom_point(data = subset(isolate(avg_exp()), gene == selected_de_gene()),
+                     size = 5, fill = "red",color=  "black",pch = 21)
+      }
+      avg_exp_plot
+    })
+    
+    de_violin_data <- reactive({
+
+      ## Merge both expression tables
+      de_group_1 <- isolate(de_analysis_group1())
+      group1_name <- isolate(input$de_group_1_sel)
+      de_group_2 <- isolate(de_analysis_group2())
+      group2_name <- isolate(input$de_group_2_sel)
+      
+      matrix <- rbind(de_group_1,de_group_2)
+      colnames(matrix) <- rvalues$features
+      matrix_sub <- matrix[,selected_de_gene()]
+      
+      ## Create a feature vector for both groups
+      feature_vec_1 <- replicate(nrow(de_group_1),group1_name)
+      feature_vec_2 <- replicate(nrow(de_group_2),group2_name)
+      feature_vec <- c(feature_vec_1,feature_vec_2)
+      
+      final_df <- data.frame("exp" = matrix_sub,
+                             "group" = feature_vec)
+      
+      ## set order of the two groups, such that group1 is always first
+      final_df$group <- factor(final_df$group,
+                               levels = c(group1_name,group2_name))
+        
+      final_df
+    })
+    
+
+    ## Correlation plot for differential expression
+    output$de_violin_plot <- renderPlot({
+      req(selected_de_gene())
+      ggplot(isolate(de_violin_data()),aes(group,exp, fill = group)) +
+        geom_violin() +
+        stat_summary(fun=mean, geom="point", size=5, color = "black") +
+        scale_fill_manual(values = c("#4682B4","#B47846")) +
+        bbc_style() +
+        theme(axis.title = element_text(size = 16, face = "bold")) +
+        theme(legend.position = "none") +
+        labs(x = "Feature",
+             y = "Gene expression",
+             title = selected_de_gene())
+    })
+    
+    
+  })
   
 } # server end
