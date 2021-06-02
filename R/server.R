@@ -1875,7 +1875,7 @@ server <- function(input, output, session){
     output$de_volcano_plot <- renderPlot({
       req(de_res())
       de_res_tbl <- de_res() %>%
-        mutate("padj" = if_else(padj == 0,1e-300,padj))
+        mutate("padj" = if_else(padj == 0,.Machine$double.xmin,padj))
       
       volcano_plot <- ggplot(isolate(de_res_tbl),aes(logFC,-log10(padj))) +
         geom_point() +
