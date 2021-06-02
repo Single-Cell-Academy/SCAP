@@ -264,38 +264,12 @@ library("shinyjs")
       wellPanel(
         fluidRow(
           column(
-            width = 4,
-            tags$head(
-              tags$style(
-                HTML(
-                  "#inputs-table-2 {border-collapse: collapse;}
-                  #inputs-table-2 td {padding: 10px;vertical-align: bottom;}"
-                ) #/ HTML
-              ) #/ style
-            ), #/ head
-            tags$head(
-              tags$style(
-                type="text/css",
-                "#image img {max-width: 100%; width: auto; height: auto}"
-              )
-            ),
-            tags$table(
-              id = 'inputs-table-2',
-              style = "width: 100%",
-              tags$tr(
-                tags$td(
-                  style = 'width: 50%',
-                  h3(textOutput('data_used_mod'))
-                ),
-                tags$td(
-                  style = 'width: 50%; text-align: left;',
-                  div(
-                    class = 'from-group shiny-input-container',
-                    shinyFilesButton("h5ad_in_mod", "Select an H5ad Dataset", "Please select an H5ad Dataset", multiple = FALSE)
-                  )
-                )
-              )
-            )
+            width = 2,
+            uiOutput('data_used_mod')
+          ),
+          column(
+            width = 2,
+            shinyFilesButton("h5ad_in_mod", "Select an H5ad Dataset", "Please select an H5ad Dataset", multiple = FALSE)
           ),
           column(
             width = 2,
@@ -312,7 +286,7 @@ library("shinyjs")
         )
       ),
       conditionalPanel(
-        condition = "input.assay_mod !== 'Select dataset'",
+        condition = "input.assay_1",
         fluidRow(
           style='padding:50px;',
           column(
@@ -445,7 +419,7 @@ library("shinyjs")
   ),
   ## Custom metadata panel start
   tabPanel(
-    "Custom metadata",
+    "Custom Metadata",
     conditionalPanel(condition = '!input.assay_1', h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')),
     conditionalPanel(
       condition = 'input.assay_1',
@@ -555,8 +529,6 @@ library("shinyjs")
       )
     )
   ), 
-  ## Custom metadata panel end  
-  
   ## Custom metadata panel end  
   #### Scibet panel
   tabPanel(
@@ -736,4 +708,4 @@ library("shinyjs")
   includeMarkdown("../changelog/changelog.md")
   ), ## end news tabPanel
   useShinyjs()
-)   # end ui                                                                                                
+)   # end ui

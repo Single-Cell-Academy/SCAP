@@ -96,6 +96,10 @@ server <- function(input, output, session){
     ## Determine type of annotation and create a layer to annotate for easy usage later on
     rvalues$obs_cat <- check_if_obs_cat(obs_df = data[[1]]$obs) ## Function to check if an observation is categorical or numeric
     reductions <- data[[1]]$obsm$as_dict()
+    if(length(reductions) == 0){
+        showModal(modalDialog(p(paste0(h5ad_files[i], " has no dimensional reductions.")), title = "Error connecting to h5ad file."), session = getDefaultReactiveDomain())
+        return(NULL)
+    }
     reduction_keys <- data[[1]]$obsm_keys()
     r_names <- rownames(data[[1]]$obs)
     for(i in 1:length(reductions)){
@@ -108,6 +112,12 @@ server <- function(input, output, session){
     rvalues$cell_ids <- rownames(data[[1]]$obs)
     rvalues$h5ad <- data
     rvalues$path_to_data <- h5ad_files
+      
+    ## unload modality rvalues
+    for(i in names(rvalues_mod)){
+      rvalues_mod[[i]] <- NULL
+    }
+      
     ## Determine what data is likely stored in .raw
     if(is.null(data[[1]]$raw)){ ## Check if raw exists
       rvalues$raw_dtype <- "NULL"
@@ -116,7 +126,7 @@ server <- function(input, output, session){
     }else{ ## Only if the other two conditions fail, use raw values to calculate differential expression
       rvalues$raw_dtype <- "normalized"
     }
-    
+      
     init <<- 0
   })
 
@@ -650,10 +660,9 @@ server <- function(input, output, session){
     if(is.null(data)) return(NULL)
     if(length(data) != length(assays)) return(NULL)
     if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
-    
-    if(all(data[[1]]$obs_names$values == rvalues$h5ad[[1]]$obs_names$values) == FALSE){
-        showModal(modalDialog(p(paste0("Cell mismatch error. Not all cell IDs from ", h5ad_files[i], " match the cell IDs from ", rvalues$path_to_data, ".")), title = "Error connecting to h5ad file."), session = getDefaultReactiveDomain())
-        return(NULL)
+    if((length(data[[1]]$obs_names$values) != length(rvalues$h5ad[[1]]$obs_names$values)) || (all(as.character(data[[1]]$obs_names$values) == as.character(rvalues$h5ad[[1]]$obs_names$values)) == FALSE)){
+      showModal(modalDialog(p(paste0("Cell mismatch error. Not all cell IDs from ", h5ad_files[i], " match the cell IDs from ", rvalues$path_to_data, ".")), title = "Error connecting to h5ad file."), session = getDefaultReactiveDomain())
+      return(NULL)
     }
 
     names(data) <- assays
@@ -691,27 +700,25 @@ server <- function(input, output, session){
 
   #-- select input for Assay --#
   output$assay_mod <- renderUI({
-    req(rvalues_mod$h5ad)
-    selectInput('assay_mod', "Select Assay", 
-      choices = names(rvalues_mod$h5ad), 
-      selected = ifelse(any(names(rvalues_mod$h5ad)=="RNA"),
-        yes = "RNA",
-        no = names(rvalues_mod$h5ad)[1])
-      )
+    if(is.null(rvalues_mod$h5ad)){
+      return(NULL)
+    }else{
+      return(selectInput('assay_mod', "Select Assay", choices = names(rvalues_mod$h5ad), selected = ifelse(any(names(rvalues_mod$h5ad)=="RNA"), yes = "RNA", no = names(rvalues_mod$h5ad)[1])))
+    }
   })
 
   #-- Display name of data --#
-  output$data_used_mod <- renderText({
-    if(!is.null(input$assay_mod) & !is.na(input$h5ad_in_mod[[1]][2])){
-      path <- sub(".*\\/", "", parseFilePaths(selection = input$h5ad_in_mod, roots = volumes)$datapath)
-      return(paste0("Chosen data: ", path))
+  output$data_used_mod <- renderUI({
+    if(is.null(rvalues_mod$h5ad)){
+      h3('Select data')
     }else{
-      return(paste0(""))
+      path <- sub(".*\\/", "", parseFilePaths(selection = input$h5ad_in_mod, roots = volumes)$datapath)
+      h3(paste0("Chosen data: ", path))
     }
   })
 
   output$grouping_mod <- renderUI({
-    req(input$assay_mod, rvalues_mod$obs)
+    req(rvalues_mod$h5ad, input$assay_mod, rvalues_mod$obs)
     assay <- input$assay_mod
     if(any(grepl("seurat_clusters", rvalues_mod$obs, ignore.case = TRUE))){
       sel <- rvalues_mod$obs[grep("seurat_clusters", rvalues_mod$obs, , ignore.case = TRUE)]
@@ -726,7 +733,7 @@ server <- function(input, output, session){
   })
 
   output$reduction_mod <- renderUI({
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     assay <- input$assay_mod
     options <- names(rvalues_mod$reductions)
     sel <- if(any(grepl("umap", options, ignore.case = TRUE))){
@@ -740,7 +747,7 @@ server <- function(input, output, session){
   })
 
   output$featureplot_mod_feature_select <- renderUI({
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     assay <- input$assay_mod
     selectInput(inputId = 'featureplot_mod_feature_select', 
                 label = 'Select a Feature to Visualize on the Feature Plot', 
@@ -750,7 +757,7 @@ server <- function(input, output, session){
   })
 
   output$ridgeplot_mod_feature_select <- renderUI({
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     assay <- input$assay_mod
     selectInput(inputId = 'ridgeplot_mod_feature_select', 
                 label = 'Select Features to Visualize on the Ridge Plot', 
@@ -761,7 +768,7 @@ server <- function(input, output, session){
 
   #-- dimensional reduction plot coloured by cell groups --#
   output$dimplot_mod <- renderPlotly({
-    req(input$grouping_mod, input$reduction_mod)
+    req(rvalues_mod$h5ad, input$grouping_mod, input$reduction_mod)
     group.by <- list(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
     names(group.by) <- input$grouping_mod
     names(group.by[[1]]) <- rvalues_mod$cell_ids
@@ -786,7 +793,7 @@ server <- function(input, output, session){
 
   #-- dimensional reduction plot coloured by feature expression --#
   output$featureplot_mod <- renderPlotly({
-    req(input$grouping_mod, input$reduction_mod, input$featureplot_mod_feature_select)
+    req(rvalues_mod$h5ad, input$grouping_mod, input$reduction_mod, input$featureplot_mod_feature_select)
     group.by <- list(rvalues_mod$h5ad[[1]]$obs[input$grouping_mod][,,drop=TRUE])
     names(group.by) <- input$grouping_mod
     names(group.by[[1]]) <- rvalues_mod$cell_ids
@@ -814,7 +821,7 @@ server <- function(input, output, session){
 
   ## output variable to hold type of user selected grouping for main panel
   output$grouping_mod_type <- reactive({
-    req(input$grouping_mod)
+    req(rvalues_mod$h5ad, input$grouping_mod)
     cat <- rvalues_mod$obs_cat[which(rvalues_mod$obs == input$grouping_mod)]
     if(cat){"yes"}else{"no"}
   })
@@ -840,7 +847,7 @@ server <- function(input, output, session){
   
   #### CRISPR feature 1 parameters
   output$crispr_feature_1 <- renderUI({ ## Feature 1 selected for CRISPR
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     selectInput(inputId = 'crispr_feature_1_sel', 
                 label = 'Select feature #1 you want to compare!', 
                 choices = rvalues_mod$features, 
@@ -849,7 +856,7 @@ server <- function(input, output, session){
   })
   
   output$crispr_feature_1_slider <- renderUI({ ## Feature 1 selected for CRISPR
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     req(input$crispr_feature_1_sel)
     if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       expr_range <- rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_1_sel, rvalues_mod$features)]
@@ -867,7 +874,7 @@ server <- function(input, output, session){
   })
   
   output$crispr_feature_1_dist <- renderPlot({
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     req(input$crispr_feature_1_sel)
     req(input$crispr_feature_1_slider_val)
     
@@ -890,7 +897,7 @@ server <- function(input, output, session){
   })
   
   crispr_feature_1_cells <- reactive({
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     req(input$crispr_feature_1_sel)
     req(input$crispr_feature_1_slider_val)
 
@@ -910,7 +917,7 @@ server <- function(input, output, session){
   })
   
   output$crispr_feature_1_cells_print <- renderText({
-    req(crispr_feature_1_cells())
+    req(rvalues_mod$h5ad, crispr_feature_1_cells())
     cells_pass <- subset(crispr_feature_1_cells(),pass_exp_thr == "yes")
     res_string <- paste("There are ",nrow(cells_pass)," cells above your selected threshold for feature:",
                         input$crispr_feature_1_sel,sep="")
@@ -920,7 +927,7 @@ server <- function(input, output, session){
   
   #### CRISPR feature 2 parameters
   output$crispr_feature_2 <- renderUI({ ## Feature 1 selected for CRISPR
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     req(input$crispr_feature_1_sel)
     
     feature_options <- setdiff(rvalues_mod$features,input$crispr_feature_1_sel)
@@ -933,7 +940,7 @@ server <- function(input, output, session){
   })
   
   output$crispr_feature_2_slider <- renderUI({ ## Feature 1 selected for CRISPR
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     req(input$crispr_feature_2_sel)
     if(rvalues_mod$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
       expr_range <- rvalues_mod$h5ad[[1]]$X[,match(input$crispr_feature_2_sel, rvalues_mod$features)]
@@ -951,7 +958,7 @@ server <- function(input, output, session){
   })
   
   output$crispr_feature_2_dist <- renderPlot({
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
@@ -977,7 +984,7 @@ server <- function(input, output, session){
   })
   
   crispr_feature_2_cells <- reactive({
-    req(input$assay_mod)
+    req(rvalues_mod$h5ad, input$assay_mod)
     req(input$crispr_feature_2_sel)
     req(input$crispr_feature_2_slider_val)
     
@@ -997,7 +1004,7 @@ server <- function(input, output, session){
   })
   
   output$crispr_feature_2_cells_print <- renderText({
-    req(crispr_feature_2_cells())
+    req(rvalues_mod$h5ad, crispr_feature_2_cells())
     cells_pass <- subset(crispr_feature_2_cells(),pass_exp_thr == "yes")
     res_string <- paste("There are ",nrow(cells_pass)," cells above your selected threshold for feature:",
                         input$crispr_feature_2_sel,sep="")
@@ -1006,6 +1013,7 @@ server <- function(input, output, session){
   
   #### Action button for calculating CRISPR DE
   observeEvent(input$crispr_de_analysis,{
+    req(rvalues_mod$h5ad)
     shinyjs::showElement(id= "crispr_res")
     
     crispr_feature_1_cells_rna <- isolate({
@@ -1053,7 +1061,7 @@ server <- function(input, output, session){
     })
       
     output$crispr_avg_gene_exp <- renderPlotly({
-      req(merged_crispr_feature_avg_exp())
+      req(rvalues_mod$h5ad, merged_crispr_feature_avg_exp())
       avg_exp_plot_plotly <- plot_ly(data = merged_crispr_feature_avg_exp(),
                                      x = ~feature_1_avg_exp,
                                      y = ~feature_2_avg_exp,
@@ -1068,14 +1076,14 @@ server <- function(input, output, session){
     selected <- reactive(getReactableState("crispr_avg_gene_exp_tbl", "selected"))
     
     output$crispr_avg_gene_exp_tbl <- renderReactable({
-      req(merged_crispr_feature_avg_exp())
+      req(rvalues_mod$h5ad, merged_crispr_feature_avg_exp())
     
-      reactable(merged_crispr_feature_avg_exp(),
+      reactable(rvalues_mod$h5ad, merged_crispr_feature_avg_exp(),
                 selection = 'single' , onClick = 'select', searchable = TRUE,)
     })
     
     output$crispr_gene_vlnplot <- renderPlot({
-      req(merged_crispr_feature_avg_exp())
+      req(rvalues_mod$h5ad, merged_crispr_feature_avg_exp())
       req(selected())
       
       gene_selected <- merged_crispr_feature_avg_exp()[selected(),]$gene
