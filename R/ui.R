@@ -706,9 +706,6 @@ library("shinyjs")
     #h1('Stuff Goes Here')
     )
   ),
-  tabPanel(
-  "Changelog",
-  includeMarkdown("../changelog/changelog.md")
-  ), ## end news tabPanel
+  source(file.path("ui", "changelog.R"),  local = TRUE)$value,
   useShinyjs()
 )   # end ui
