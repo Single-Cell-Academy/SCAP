@@ -11,6 +11,7 @@ library("shinyjs")
   ui <- navbarPage(
 
   fluid = TRUE,
+  collapsible = TRUE,
   theme = shinytheme('cosmo'),
   title = "Single Cell Analysis Portal",
 
@@ -600,6 +601,8 @@ library("shinyjs")
       )
     )
   ),
+  
+  ### File conversion panel
   tabPanel(
     "File Conversion",
     sidebarPanel(
