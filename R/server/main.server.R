@@ -113,7 +113,7 @@ output$dimplot_1 <- renderPlotly({
   cat <- rvalues$obs_cat[which(rvalues$obs == input$grouping_1)]
   if(cat){
     dimPlotlyOutput(assay.in = input$assay_1, 
-                    reduc.in = rvalues$reductions[[input$reduction_1]], 
+                    reduc.in = rvalues$reductions[[input$reduction_1]][,c(1,2)], 
                     group.by = group.by, 
                     annot_panel = "", 
                     low.res = 'yes')
@@ -122,7 +122,7 @@ output$dimplot_1 <- renderPlotly({
     colnames(feature.in) <- input$grouping_1
     rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
     featurePlotlyOutput(assay.in = input$assay_1,
-                        reduc.in = rvalues$reductions[[input$reduction_1]],
+                        reduc.in = rvalues$reductions[[input$reduction_1]][,c(1,2)],
                         group.by = group.by,
                         feature.in = feature.in,
                         low.res = 'yes')
@@ -144,13 +144,13 @@ output$featureplot_1 <- renderPlotly({
   rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
   if(input$nebulosa_on == 'no'){
     featurePlotlyOutput(assay.in = input$assay_1,
-                        reduc.in = rvalues$reductions[[input$reduction_1]],
+                        reduc.in = rvalues$reductions[[input$reduction_1]][,c(1,2)],
                         group.by = group.by,
                         feature.in = feature.in,
                         low.res = 'yes')
   }else{
     featurePlotlyOutput_nebulosa(assay.in = input$assay_1,
-                                 reduc.in = rvalues$reductions[[input$reduction_1]],
+                                 reduc.in = rvalues$reductions[[input$reduction_1]][,c(1,2)],
                                  group.by = as.data.frame(group.by),
                                  feature.in = feature.in,
                                  low.res = 'yes')

@@ -144,7 +144,7 @@ output$dimplot_mod <- renderPlotly({
     colnames(feature.in) <- input$grouping_mod
     rownames(feature.in) <- rownames(rvalues_mod$reductions[[input$reduction_mod]])
     featurePlotlyOutput(assay.in = input$assay_mod,
-                        reduc.in = rvalues_mod$reductions[[input$reduction_mod]],
+                        reduc.in = rvalues_mod$reductions[[input$reduction_mod]][,c(1,2)],
                         group.by = group.by,
                         feature.in = feature.in,
                         low.res = 'yes')
@@ -166,13 +166,13 @@ output$featureplot_mod <- renderPlotly({
   rownames(feature.in) <- rownames(rvalues_mod$reductions[[input$reduction_mod]])
   if(input$nebulosa_mod_on == 'no'){
     featurePlotlyOutput(assay.in = input$assay_mod,
-                        reduc.in = rvalues_mod$reductions[[input$reduction_mod]],
+                        reduc.in = rvalues_mod$reductions[[input$reduction_mod]][,c(1,2)],
                         group.by = group.by,
                         feature.in = feature.in,
                         low.res = 'yes')
   }else{
     featurePlotlyOutput_nebulosa(assay.in = input$assay_mod,
-                                 reduc.in = rvalues_mod$reductions[[input$reduction_mod]],
+                                 reduc.in = rvalues_mod$reductions[[input$reduction_mod]][,c(1,2)],
                                  group.by = as.data.frame(group.by),
                                  feature.in = feature.in,
                                  low.res = 'yes')

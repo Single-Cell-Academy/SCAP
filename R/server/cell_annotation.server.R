@@ -84,7 +84,7 @@ output$dimplot_2 <- renderPlotly({
   names(group.by) <- input$grouping_2
   names(group.by[[1]]) <- rvalues$cell_ids
   dimPlotlyOutput(assay.in = input$assay_2, 
-                  reduc.in = rvalues$reductions[[input$reduction_2]], 
+                  reduc.in = rvalues$reductions[[input$reduction_2]][,c(1,2)], 
                   group.by = group.by, 
                   annot_panel = input$annot_panel, 
                   tmp_annotations = rvalues$tmp_annotations, 
@@ -105,7 +105,7 @@ output$featureplot_2 <- renderPlotly({
   colnames(feature.in) <- input$featureplot_2_feature_select
   rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_2]])
   featurePlotlyOutput(assay.in = input$assay_2, 
-                      reduc.in = rvalues$reductions[[input$reduction_2]], 
+                      reduc.in = rvalues$reductions[[input$reduction_2]][,c(1,2)], 
                       group.by = group.by, 
                       feature.in = feature.in, 
                       low.res = 'yes')
