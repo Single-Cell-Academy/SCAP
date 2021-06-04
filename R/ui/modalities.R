@@ -135,7 +135,7 @@ tabPanel(
                                                                            color="black", proxy.height = '400px')),
                       
                       column(align = "center", width = 4,
-                             reactableOutput("crispr_avg_gene_exp_tbl",
+                             reactableOutput("crispr_de",
                                              height = 'auto') %>% withSpinner(type = 3,color.background = "white",
                                                                               color="black", proxy.height = '400px')),
                       

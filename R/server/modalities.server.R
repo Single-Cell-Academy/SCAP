@@ -56,6 +56,16 @@ observeEvent(input$h5ad_in_mod, {
   rvalues_mod$h5ad <- data
   rvalues_mod$path_to_data <- h5ad_files
   init <<- 0
+  
+  ## Determine what data is likely stored in .raw
+  if(is.null(data[[1]]$raw)){ ## Check if raw exists
+    rvalues_mod$raw_dtype <- "NULL"
+  }else if(sum(rvalues$h5ad[[1]]$raw$X[1,]) %% 1 == 0){ ## Check whether raw contains un-normalized data or normalized data
+    rvalues_mod$raw_dtype <- "counts"
+  }else{ ## Only if the other two conditions fail, use raw values to calculate differential expression
+    rvalues_mod$raw_dtype <- "normalized"
+  }
+  
 })
 
 #-- select input for Assay --#
@@ -403,6 +413,30 @@ observeEvent(input$crispr_de_analysis,{
     crispr_feature_2_rna_mat
   })
   
+  ## Calculate differential expression for RNA of both features
+  mod_de_res <- reactive({
+    de_group1 <- isolate(crispr_feature_1_cells_rna)
+    de_group2 <- isolate(crispr_feature_2_cells_rna)
+    
+    ## Merge both expression tables
+    matrix_tr <- t(rbind(de_group1,de_group2))
+    rownames(matrix_tr) <- rownames(rvalues$h5ad[[1]]$var)
+    
+    ## Create a feature vector for both groups
+    feature_vec_1 <- replicate(nrow(de_group1),isolate(input$crispr_feature_1_sel))
+    feature_vec_2 <- replicate(nrow(de_group2),isolate(input$crispr_feature_2_sel))
+    feature_vec <- c(feature_vec_1,feature_vec_2)
+    
+    de_res <- wilcoxauc(matrix_tr, feature_vec)
+    de_res <- de_res %>%
+      arrange(desc(logFC)) %>%
+      subset(group == isolate(input$crispr_feature_2_sel)) %>%
+      dplyr::select(-c(pct_in,pct_out,group,statistic))
+    
+    de_res
+  })
+  
+  ## Table containing average RNA expression values for both features
   merged_crispr_feature_avg_exp <- reactive({
     
     crispr_feature_1_rna_mat_means <- colMeans(as.matrix(crispr_feature_1_cells_rna))
@@ -433,20 +467,23 @@ observeEvent(input$crispr_de_analysis,{
     avg_exp_plot_plotly
   })
   
-  selected <- reactive(getReactableState("crispr_avg_gene_exp_tbl", "selected"))
-  
-  output$crispr_avg_gene_exp_tbl <- renderReactable({
-    req(rvalues_mod$h5ad, merged_crispr_feature_avg_exp())
+  selected <- reactive(getReactableState("crispr_de", "selected"))
+  output$crispr_de <- renderReactable({
+    req(mod_de_res())
     
-    reactable(rvalues_mod$h5ad, merged_crispr_feature_avg_exp(),
-              selection = 'single' , onClick = 'select', searchable = TRUE,)
+    mod_de_res_tbl_view <- mod_de_res() 
+    
+    reactable(isolate(mod_de_res_tbl_view),
+              sortable = TRUE,
+              searchable = TRUE,
+              selection = "single")
   })
   
   output$crispr_gene_vlnplot <- renderPlot({
-    req(rvalues_mod$h5ad, merged_crispr_feature_avg_exp())
+    req(rvalues_mod$h5ad, mod_de_res())
     req(selected())
     
-    gene_selected <- merged_crispr_feature_avg_exp()[selected(),]$gene
+    gene_selected <- mod_de_res()[selected(),]$feature
     gene_selected_index <- match(gene_selected,rownames(rvalues$h5ad[[1]]$var))
     
     feature_1_gene_exp <- crispr_feature_1_cells_rna
@@ -472,6 +509,8 @@ observeEvent(input$crispr_de_analysis,{
   
 })
 
+
+## Correlation plot functions
 output$corr_grouping <- renderUI({
   req(rvalues_mod$obs,input$assay_mod)
   assay <- input$assay_mod
