@@ -1,6 +1,7 @@
 ## Differential expression server elements
 output$de_annotation_list <- renderUI({
   req(input$assay_1)
+  req(rvalues$h5ad)
   req(rvalues$obs)
   req(rvalues$obs_cat)
   
@@ -17,7 +18,7 @@ output$de_annotation_list <- renderUI({
 
 ## Baseline group for differential expression comparison
 output$de_group_1_list <- renderUI({
-  req(input$assay_1,input$de_anno_sel)
+  req(input$assay_1,rvalues$h5ad,input$de_anno_sel)
   
   anno_choices <- unique(rvalues$h5ad[[1]]$obs[c(input$de_anno_sel)][,1])
   
@@ -72,7 +73,7 @@ de_analysis_group2 <- reactive({
 
 ## Event when user clicks button to compare differential expression
 observeEvent(input$run_de_analysis,{
-  
+
   de_res <- reactive({
     de_group1 <- isolate(de_analysis_group1())
     de_group2 <- isolate(de_analysis_group2())
@@ -111,7 +112,12 @@ observeEvent(input$run_de_analysis,{
   })
   
   output$de_res_table <- renderReactable({
+    req(de_res())
     de_res_tbl_view <- de_res() 
+    
+    ## Round certain columns to 4 numbers behind comma for space reasons
+    de_res_tbl_view <- de_res_tbl_view %>%
+      mutate_at(vars(avgExpr, logFC,auc), funs(round(., 4)))
     
     reactable(isolate(de_res_tbl_view),
               sortable = TRUE,
@@ -148,6 +154,7 @@ observeEvent(input$run_de_analysis,{
   
   ## Correlation plot for differential expression
   output$de_avg_exp_plot <- renderPlot({
+    req(avg_exp())
     group1_name <- isolate(input$de_group_1_sel)
     group2_name <- isolate(input$de_group_2_sel)
     avg_exp_plot <- ggplot(isolate(avg_exp()),aes(group1,group2)) +
@@ -197,6 +204,7 @@ observeEvent(input$run_de_analysis,{
   
   ## Correlation plot for differential expression
   output$de_violin_plot <- renderPlot({
+
     req(selected_de_gene())
     ggplot(isolate(de_violin_data()),aes(group,exp, fill = group)) +
       geom_violin() +
@@ -209,4 +217,8 @@ observeEvent(input$run_de_analysis,{
            y = "Gene expression",
            title = selected_de_gene())
   })
+  
+  shinyjs::hide("empty_de")
+  shinyjs::show("de_results")
+
 })

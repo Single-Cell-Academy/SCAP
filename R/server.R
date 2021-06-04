@@ -41,6 +41,8 @@ server <- function(input, output, session){
                             raw_dtype = NULL)
   rvalues_mod <- reactiveValues(tmp_annotations = NULL, cells = NULL, order = NULL, features = NULL, obs = NULL, obs_cat = NULL, reductions = NULL, cell_ids = NULL, h5ad = NULL, path_to_data = NULL,
                                 raw_dtype = NULL)
+  
+  de_reacts <- reactiveValues(do_DE_plots = FALSE)
 
   ## Determine folders for ShinyDir button
   volumes <- c("FTP" = "/ftp", Home = fs::path_home())
@@ -128,6 +130,11 @@ server <- function(input, output, session){
     }
       
     init <<- 0
+
+    ## Hide differential expression panels and reset input values
+    shinyjs::hide("de_results")
+    ## Show message when no DE has been calculated (i.e. a new dataset loaded)
+    shinyjs::show("empty_de")
   })
 
   # observe({ # auto save h5ad file(s)
