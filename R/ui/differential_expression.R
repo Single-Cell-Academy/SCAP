@@ -30,9 +30,17 @@ tabPanel(
       )
     ),
     mainPanel(
-      conditionalPanel(condition = 'input.run_de_analysis == 0', h2('Please select your settings for differential expression analysis on the left.', 
-                                                                    style = 'text-align: center; font-style: italic;')),
-      conditionalPanel(condition = 'input.run_de_analysis != 0',
+      ## Message shown at the very beginning
+
+      shinyjs::hidden(
+        div(id = "empty_de",
+          wellPanel(h2('Please select your settings for differential expression analysis on the left.', 
+             style = 'text-align: center; font-style: italic;'))
+        )),
+      
+      shinyjs::hidden(
+        div(
+          id = "de_results",
                        fluidRow(
                          column(width = 8,
                                 reactableOutput("de_res_table"),
@@ -49,7 +57,8 @@ tabPanel(
                          column(width = 6,
                                 plotOutput("de_avg_exp_plot"))
                        )
-      )
+          )
+        )
     )
   )
 )
