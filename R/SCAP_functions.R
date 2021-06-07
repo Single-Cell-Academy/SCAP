@@ -1,47 +1,62 @@
 library("shiny")
-library("shinycssloaders")
-library("shinyFiles")
-library("shinyjqui")
-library("shinythemes")
 library("cowplot")
-library("dplyr")
 library("ggplot2")
+library("ggridges")
 library("ggthemes")
 library("gtools")
 library("loomR")
-library("hdf5r")
 library("Matrix")
-library("MODIS")
 library("plotly")
-library("presto")
 library("Seurat")
-library("rjson")
 library("viridis")
 library("Nebulosa")
-library("stringr")
 library("Seurat")
 library("SeuratDisk")
 library("reticulate")
 
-palette <- colorRampPalette(c("lightgrey", viridis(10)))
+COLORPAL_CONTINUOUS <- colorRampPalette(c("lightgrey", viridis(10)))
 
-check_if_obs_cat <- function(obs_names,
-                             obs_df){
-  obs_cat <- c()
-  for(obs in obs_names){
-    annotation <- obs_df[obs][,,drop=TRUE]
-    if(is.numeric(annotation)){ ## Check if the annotation is numeric
-      uniq_groups <- length(unique(annotation))
-      if(uniq_groups <= 50){
-        category <- obs # categorical
-        obs_cat <- c(obs_cat,category)
-      }
-    }else{
-      category <- obs
-      obs_cat <- c(obs_cat,category)
-    }
-  }
-  return(obs_cat)
+COLORPAL_DISCRETE <- c("#000000", "#FFFF00", "#1CE6FF", "#FF34FF", "#FF4A46", "#008941",
+"#006FA6", "#A30059", "#FFDBE5", "#7A4900", "#0000A6", "#63FFAC", "#B79762", "#004D43", 
+"#8FB0FF", "#997D87", "#5A0007", "#809693", "#FEFFE6", "#1B4400", "#4FC601", "#3B5DFF", 
+"#4A3B53", "#FF2F80", "#61615A", "#BA0900", "#6B7900", "#00C2A0", "#FFAA92", "#FF90C9", 
+"#B903AA", "#D16100", "#DDEFFF", "#000035", "#7B4F4B", "#A1C299", "#300018", "#0AA6D8", 
+"#013349", "#00846F", "#372101", "#FFB500", "#C2FFED", "#A079BF", "#CC0744", "#C0B9B2", 
+"#C2FF99", "#001E09", "#00489C", "#6F0062", "#0CBD66", "#EEC3FF", "#456D75", "#B77B68", 
+"#7A87A1", "#788D66", "#885578", "#FAD09F", "#FF8A9A", "#D157A0", "#BEC459", "#456648", 
+"#0086ED", "#886F4C", "#34362D", "#B4A8BD", "#00A6AA", "#452C2C", "#636375", "#A3C8C9", 
+"#FF913F", "#938A81", "#575329", "#00FECF", "#B05B6F", "#8CD0FF", "#3B9700", "#04F757", 
+"#C8A1A1", "#1E6E00", "#7900D7", "#A77500", "#6367A9", "#A05837", "#6B002C", "#772600", 
+"#D790FF", "#9B9700", "#549E79", "#FFF69F", "#201625", "#72418F", "#BC23FF", "#99ADC0", 
+"#3A2465", "#922329", "#5B4534", "#FDE8DC", "#404E55", "#0089A3", "#CB7E98", "#A4E804", 
+"#324E72", "#6A3A4C", "#83AB58", "#001C1E", "#D1F7CE", "#004B28", "#C8D0F6", "#A3A489", 
+"#806C66", "#222800", "#BF5650", "#E83000", "#66796D", "#DA007C", "#FF1A59", "#8ADBB4", 
+"#1E0200", "#5B4E51", "#C895C5", "#320033", "#FF6832", "#66E1D3", "#CFCDAC", "#D0AC94", 
+"#7ED379", "#012C58", "#7A7BFF", "#D68E01", "#353339", "#78AFA1", "#FEB2C6", "#75797C", 
+"#837393", "#943A4D", "#B5F4FF", "#D2DCD5", "#9556BD", "#6A714A", "#001325", "#02525F", 
+"#0AA3F7", "#E98176", "#DBD5DD", "#5EBCD1", "#3D4F44", "#7E6405", "#02684E", "#962B75", 
+"#8D8546", "#9695C5", "#E773CE", "#D86A78", "#3E89BE", "#CA834E", "#518A87", "#5B113C", 
+"#55813B", "#E704C4", "#00005F", "#A97399", "#4B8160", "#59738A", "#FF5DA7", "#F7C9BF", 
+"#643127", "#513A01", "#6B94AA", "#51A058", "#A45B02", "#1D1702", "#E20027", "#E7AB63", 
+"#4C6001", "#9C6966", "#64547B", "#97979E", "#006A66", "#391406", "#F4D749", "#0045D2", 
+"#006C31", "#DDB6D0", "#7C6571", "#9FB2A4", "#00D891", "#15A08A", "#BC65E9", "#FFFFFE", 
+"#C6DC99", "#203B3C", "#671190", "#6B3A64", "#F5E1FF", "#FFA0F2", "#CCAA35", "#374527", 
+"#8BB400", "#797868", "#C6005A", "#3B000A", "#C86240", "#29607C", "#402334", "#7D5A44", 
+"#CCB87C", "#B88183", "#AA5199", "#B5D6C3", "#A38469", "#9F94F0", "#A74571", "#B894A6", 
+"#71BB8C", "#00B433", "#789EC9", "#6D80BA", "#953F00", "#5EFF03", "#E4FFFC", "#1BE177", 
+"#BCB1E5", "#76912F", "#003109", "#0060CD", "#D20096", "#895563", "#29201D", "#5B3213", 
+"#A76F42", "#89412E", "#1A3A2A", "#494B5A", "#A88C85", "#F4ABAA", "#A3F3AB", "#00C6C8", 
+"#EA8B66", "#958A9F", "#BDC9D2", "#9FA064", "#BE4700", "#658188", "#83A485", "#453C23", 
+"#47675D", "#3A3F00", "#061203", "#DFFB71", "#868E7E", "#98D058", "#6C8F7D", "#D7BFC2", 
+"#3C3E6E", "#D83D66", "#2F5D9B", "#6C5E46", "#D25B88", "#5B656C", "#00B57F", "#545C46", 
+"#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B")
+
+check_if_obs_cat <- function(obs_df){
+  len <- nrow(obs_df)
+  uni <- apply(obs_df, 2, function(x){length(unique(x))})
+  cat <- (uni > (0.05*len))
+  num_check <- apply(obs_df, 2, function(x){suppressWarnings(all(!is.na(as.numeric(as.character(x)))))})
+  return(cat*num_check == 0) # TRUE = discrete, FALSE = continuous
 }
 
 save_figure <- function(file_type, file_name, units, height, width, resolution, to_plot){
@@ -648,11 +663,10 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   }else{
     plot.data[,4]
   }
-
   if(n == 2){
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], 
                  type = 'scatter', mode = 'markers', key = ~rownames(plot.data), alpha = 0.6, stroke = I('dimgrey'),
-                 color = col, text =  ~paste0(
+                 color = col, colors = COLORPAL_DISCRETE[1:length(unique(col))], text =  ~paste0(
                    names(group.by)[1],": ", plot.data[,3],"\n</br>",
                    colnames(reduc.in)[1],": ", format(plot.data[,1],digits=3),"\n",
                    "</br>",colnames(reduc.in)[2],": ", format(plot.data[,2],digits=3)),
@@ -661,7 +675,7 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   }else{
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], z = plot.data[,3],
                  type = 'scatter3d', mode = 'markers', key = ~rownames(plot.data), stroke = I('dimgrey'),
-                 color = col, text =  ~paste0(
+                 color = col, colors = COLORPAL_DISCRETE[1:length(unique(col))], text =  ~paste0(
                    names(group.by)[1],": ", plot.data[,4],"\n</br>",
                    colnames(reduc.in)[1],": ", format(plot.data[,1],digits=3),"\n",
                    "</br>",colnames(reduc.in)[2],": ", format(plot.data[,2],digits=3), "\n",
@@ -728,7 +742,7 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
   if(n == 2){
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2],
                  type = 'scatter', mode = 'markers', key = ~rownames(plot.data),
-                 color = plot.data[,4], colors = palette(100), opacity = 0.6, text =  ~paste0(
+                 color = plot.data[,4], colors = COLORPAL_CONTINUOUS(100), opacity = 0.6, text =  ~paste0(
                    names(group.by)[1],": ", plot.data[,3],"\n",
                    "</br>",'Expression',": ", format(plot.data[,4],digits=3),"\n",
                    "</br>",colnames(reduc.in)[1],"_1: ", format(plot.data[,1],digits=3),"\n",
@@ -740,7 +754,7 @@ featurePlotlyOutput <- function(assay.in, reduc.in, group.by, feature.in, low.re
   }else{
     p <- plot_ly(data = plot.data, x = plot.data[,1], y = plot.data[,2], z = plot.data[,3],
                  type = 'scatter3d', mode = 'markers', key = ~rownames(plot.data),
-                 color = plot.data[,5], colors = palette(100), opacity = 0.6, text =  ~paste0(
+                 color = plot.data[,5], colors = COLORPAL_CONTINUOUS(100), opacity = 0.6, text =  ~paste0(
                    names(group.by)[1],": ", plot.data[,4],"\n",
                    "</br>",'Expression',": ", format(plot.data[,5],digits=3),"\n",
                    "</br>",colnames(reduc.in)[1],"_1: ", format(plot.data[,1],digits=3),"\n",
@@ -775,9 +789,9 @@ featurePlotlyOutput_nebulosa <-  function(assay.in, reduc.in, group.by, feature.
                                     key = unique(sub("_[0-9]$", "", colnames(reduc.in)))) 
   
   if(ncol(feature.in) == 1){
-    return(plot_density(data_seurat, features = colnames(feature.in), size = 2) + theme_cowplot())
+    return(plot_density(data_seurat, features = colnames(feature.in), size = 1) + theme_cowplot())
   }else{
-    p <- plot_density(data_seurat, features = colnames(feature.in), joint = TRUE, combine = FALSE, size = 2) 
+    p <- plot_density(data_seurat, features = colnames(feature.in), joint = TRUE, combine = FALSE, size = 1) 
     return(p[[length(p)]] + theme_cowplot())
   }
 }
@@ -924,5 +938,127 @@ split_dot_plot <- function(data.features = NULL,
     }
   }
   return(p)
+}
+
+FacetTheme <- function(...) {
+  return(theme(
+    strip.background = element_blank(),
+    strip.text = element_text(face = 'bold'),
+    # Validate the theme
+    validate = TRUE,
+    ...
+  ))
+}
+
+ggRidgePlot <- function(
+  data,
+  sort = FALSE,
+  same.y.lims = TRUE,
+  adjust = 1,
+  pt.size = 0,
+  cols = NULL,
+  log = FALSE,
+  fill.by = NULL,
+  flip = NULL
+) {
+
+  #cat(file = stderr(), "data$expression: ", summary(data$expression), "\n")
+
+  if (!is.data.frame(x = data) || ncol(x = data) < 2) {
+    stop("RidgePlotly requires a data frame with >1 column")
+  }
+
+  if (sort) {
+    data$feature <- as.vector(x = data$feature)
+    data$ident <- as.vector(x = data$ident)
+    # build matrix of average expression (#-features by #-idents), lexical ordering
+    avgs.matrix <- sapply(
+      X = split(x = data, f = data$ident),
+      FUN = function(df) {
+        return(tapply(
+          X = df$expression,
+          INDEX = df$feature,
+          FUN = mean
+        ))
+      }
+    )
+    idents.order <- hclust(d = dist(x = t(x = L2Norm(mat = avgs.matrix, MARGIN = 2))))$order
+    avgs.matrix <- avgs.matrix[,idents.order]
+    avgs.matrix <- L2Norm(mat = avgs.matrix, MARGIN = 1)
+    # order feature clusters by position of their "rank-1 idents"
+    position <- apply(X = avgs.matrix, MARGIN = 1, FUN = which.max)
+    mat <- hclust(d = dist(x = avgs.matrix))$merge
+    orderings <- list()
+    for (i in 1:nrow(mat)) {
+      x <- if (mat[i,1] < 0) -mat[i,1] else orderings[[mat[i,1]]]
+      y <- if (mat[i,2] < 0) -mat[i,2] else orderings[[mat[i,2]]]
+      x.pos <- min(x = position[x])
+      y.pos <- min(x = position[y])
+      orderings[[i]] <- if (x.pos < y.pos) {
+        c(x, y)
+      } else {
+        c(y, x)
+      }
+    }
+    features.order <- orderings[[length(x = orderings)]]
+    data$feature <- factor(
+      x = data$feature,
+      levels = unique(x = sort(x = data$feature))[features.order]
+    )
+    data$ident <- factor(
+      x = data$ident,
+      levels = unique(x = sort(x = data$ident))[rev(x = idents.order)]
+    )
+  } else {
+    data$feature <- factor(x = data$feature, levels = unique(x = data$feature))
+  }
+  # if (log) {
+  #   noise <- rnorm(n = nrow(x = data)) / 200
+  #   data$expression <- data$expression + 1
+  # } else {
+  #   noise <- rnorm(n = nrow(x = data)) / 100000
+  # }
+  # for (f in unique(x = data$feature)) {
+  #   if (all(data$expression[(data$feature == f)] == data$expression[(data$feature == f)][1])) {
+  #     warning(
+  #       "All cells have the same value of ",
+  #       f,
+  #       call. = FALSE,
+  #       immediate. = TRUE
+  #     )
+  #   } else {
+  #     data$expression[(data$feature == f)] <- data$expression[(data$feature == f)] + noise[(data$feature == f)]
+  #   }
+  # }
+
+  # if (flip) {
+  #   x <- 'ident'
+  #   x.label <- 'Identity'
+  #   y <- 'expression'
+  #   y.label <- 'Expression Level'
+  # } else {
+  #   y <- 'ident'
+  #   y.label <- 'Identity'
+  #   x <- 'expression'
+  #   x.label <- 'Expression Level'
+  # }
+
+  data$ident <- reorder_levels(data$ident)
+  
+  plot <- ggplot(data, aes(y=ident, x=expression, fill=ident)) +
+  geom_density_ridges(alpha=0.6, bandwidth=0.5,
+                      quantile_lines = TRUE, quantiles = 2) +
+  xlab("Expression") +
+  ylab("Identity") + 
+  facet_grid(. ~ feature, scales = (if (same.y.lims) 'fixed' else 'free')) +
+  FacetTheme(
+    panel.spacing = unit(0, 'lines'),
+    panel.background = element_rect(fill = NA, color = "black"),
+    axis.text.y = element_text(size = 7),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text.y.right = element_text(angle = 0)
+  ) + NoLegend()
+
+  return(plot)
 }
 
