@@ -1,6 +1,6 @@
 #### Compare annotations
 tabPanel(
-  "Compare annotations",
+  "Compare Annotations",
   conditionalPanel(
     condition = '!input.assay_1', 
     h2('Please Select Your Dataset on the Main Tab', 
