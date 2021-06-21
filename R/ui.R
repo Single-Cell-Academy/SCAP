@@ -13,7 +13,7 @@ library("shinyjs")
   fluid = TRUE,
   collapsible = TRUE,
   theme = shinytheme('cosmo'),
-  title = "Single Cell Analysis Portal v.0.1.0",
+  title = "Single Cell Analysis Portal v.0.1.1",
 
   ## Dashboard components (TabPanels) found in /ui
   source(file.path("ui", "main.R"),  local = TRUE)$value,
