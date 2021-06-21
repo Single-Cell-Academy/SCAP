@@ -188,7 +188,7 @@ observeEvent(input$set_cell_types, ignoreNULL = FALSE, ignoreInit = FALSE, handl
     showModal(modalDialog(p(paste0("ERROR ", input$new_scheme_name, " is already in the metadata. Please choose a unique name.")), title = "Error adding metadata"), session = getDefaultReactiveDomain())
   }else{
     if(input$annot_panel == 'cell_annotation_cluster'){
-      names <- rvalues$h5ad[[1]]$obs[group.by][,,drop = TRUE]
+      names <- as.character(rvalues$h5ad[[1]]$obs[group.by][,,drop = TRUE])
       new <- names
       names <- unique(names)
       for(i in 1:length(names)){
