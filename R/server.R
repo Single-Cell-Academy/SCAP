@@ -129,7 +129,7 @@ server <- function(input, output, session){
     }
       
     init <<- 0
-
+    output$markers <- NULL
     ## Hide differential expression panels and reset input values
     shinyjs::hide("de_results")
     ## Show message when no DE has been calculated (i.e. a new dataset loaded)
