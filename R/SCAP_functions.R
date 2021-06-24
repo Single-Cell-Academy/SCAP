@@ -4,7 +4,6 @@ library("ggplot2")
 library("ggridges")
 library("ggthemes")
 library("gtools")
-library("loomR")
 library("Matrix")
 library("plotly")
 library("Seurat")
@@ -79,266 +78,6 @@ save_figure <- function(file_type, file_name, units, height, width, resolution, 
   }
 }
 
-loomToSeurat <- function(obj, loom, dir, file){
-  thisDate <- gsub(":","_",gsub(" ","_",date()))
-  print(paste("thisDate:", thisDate))
-  print(paste("obj:", obj))
-  print(paste("dir:", dir))
-  print(paste("file:", file))
-  print("loom:")
-  print(str(loom))
-  seur <- readRDS(obj)
-  print(nrow(seur@meta.data))
-  print("seur meta data:")
-  print(str(seur@meta.data))
-  print('loom # cells:')
-  print(loom[[1]]$col.attrs[[1]]$dims)
-  if(nrow(seur@meta.data) != loom[[1]]$col.attrs[[1]]$dims){
-    showModal(modalDialog(p("Error: Seurat object and loom object have different number of cells and likely do not coresspond to the same experiment"), title = paste0("ERROR")), session = getDefaultReactiveDomain())
-    return(-1)
-  }
-  loom_metaData <- loom[[1]]$get.attribute.df(attributes = names(loom[[1]]$col.attrs)[grep("_meta_data$", names(loom[[1]]$col.attrs))])
-  print("loom_metaData:")
-  print(colnames(loom_metaData))
-  colnames(loom_metaData) <- sub("_meta_data$","",colnames(loom_metaData))
-  print("loom_metaData:")
-  print(colnames(loom_metaData))
-  same_names <- colnames(loom_metaData)[which(colnames(loom_metaData)%in%colnames(seur@meta.data))]
-  if(length(same_names)>0){
-    for(i in 1:length(same_names)){
-      if(identical(loom_metaData[,same_names[i]],seur@meta.data[,same_names[i]])){
-        loom_metaData <- loom_metaData[,-which(colnames(loom_metaData)==same_names[i])]
-      }else{
-        colnames(loom_metaData)[which(colnames(loom_metaData)==same_names[i])] <- paste0(same_names[i],"_",thisDate)
-      }
-    }
-  }
-  print(paste("loom_metaData:", colnames(loom_metaData)))
-  seur@meta.data <- cbind(seur@meta.data, loom_metaData)
-  print(paste('new mata data:'))
-  print(str(seur@meta.data))
-  tryCatch(
-    {
-      seur <- UpdateSeuratObject(seur)
-    },
-    error=function(cond){
-      message('Error: Could not update Seurat Object:')
-      message(cond)
-    },
-    warning=function(cond){
-      message('Warning when trying to update Seurat Object:')
-      message(cond)
-      seur <- UpdateSeuratObject(seur)
-    },
-    finally={
-      message('Saving Seurat Object...')
-    }
-  )
-  if(is.null(file)){
-    saveRDS(seur, obj)
-  }else{
-    saveRDS(seur, paste0(dir,"/",file))
-  }
-  return(1)
-}
-
-loomToSeurat_legacy <- function(obj, loom){
-  thisDate <- gsub(":","_",gsub(" ","_",date()))
-  # print(paste("thisDate:", thisDate))
-  # print(paste("obj:", obj))
-  # print(paste("dir:", dir))
-  # print(paste("file:", file))
-  # print("loom:")
-  # print(str(loom))
-  print(nrow(obj@meta.data))
-  print("obj meta data:")
-  print(str(obj@meta.data))
-  print('loom # cells:')
-  print(loom[[1]]$col.attrs[[1]]$dims)
-  if(nrow(obj@meta.data) != loom[[1]]$col.attrs[[1]]$dims){
-    showModal(modalDialog(p("Error: Seurat object and loom object have different number of cells and likely do not coresspond to the same experiment"), title = paste0("ERROR")), session = getDefaultReactiveDomain())
-    return(-1)
-  }
-  loom_metaData <- loom[[1]]$get.attribute.df(attributes = names(loom[[1]]$col.attrs)[grep("_meta_data$", names(loom[[1]]$col.attrs))])
-  print("loom_metaData:")
-  print(colnames(loom_metaData))
-  colnames(loom_metaData) <- sub("_meta_data$","",colnames(loom_metaData))
-  print("loom_metaData:")
-  print(colnames(loom_metaData))
-  same_names <- colnames(loom_metaData)[which(colnames(loom_metaData)%in%colnames(obj@meta.data))]
-  if(length(same_names)>0){
-    for(i in 1:length(same_names)){
-      if(identical(loom_metaData[,same_names[i]],obj@meta.data[,same_names[i]])){
-        loom_metaData <- loom_metaData[,-which(colnames(loom_metaData)==same_names[i])]
-      }else{
-        colnames(loom_metaData)[which(colnames(loom_metaData)==same_names[i])] <- paste0(same_names[i],"_",thisDate)
-      }
-    }
-  }
-  print(paste("loom_metaData:", colnames(loom_metaData)))
-  obj@meta.data <- cbind(obj@meta.data, loom_metaData)
-  print(paste('new mata data:'))
-  print(str(obj@meta.data))
-  # if(is.null(file)){
-  #   saveRDS(seur, obj)
-  # }else{
-  #   saveRDS(seur, paste0(dir,"/",file))
-  # }
-  return(obj)
-}
-
-
-seuratToLoom <- function(obj, dir){
-  #library(loomR)
-  #library(hdf5r)
-  #library(Seurat)
-
-  ## Check file permissions before attempting to read the file
-  file_access <- file.access(obj, mode = 4)
-  if(file_access == -1){
-	  showNotification('Error: Permission denied! Make sure you have changed file permissions for this object!', type = 'error')
-	  return(0) ## Return failed error code
-  }
-
-  ## Make sure the object is really .rds before attempting to read it
-  if(endsWith(obj,".rds")){
-    seur <- try(readRDS(obj))
-  }else if(grepl(".h5|.h5ad",obj) ){
-    seur <- try(ReadH5AD(obj)) ## Read in scanpy object and convert to
-    if(grepl('^seurat',class(seur)[1],ignore.case = T)){
-      Idents(seur) <- "louvain_scanpy_clusters"
-      seur@assays$RNA@counts <- seur@assays$RNA@data
-    }
-  }
-
-  if(class(seur) == "try-error"){
-    showNotification('Error: The selected file is labeled .rds but is not actually a valid .rds file!', type = 'error')
-    return(0) ## Return failed error code
-  }
-  
-  if(!grepl('^seurat',class(seur)[1],ignore.case = T)){
-    showNotification('Error: The selected object is of class ', class(seur)[1], ' but must be of class Seurat', type = 'error')
-  }
-  
-  current_version <- 3
-  if(strsplit(as.character(seur@version), split = '\\.')[[1]][1]<current_version){
-    showNotification(paste0("Warning: The selected seurat object is out of date (version: ", seur@version, "). Updating to object now..."), type = 'error')
-    seur <- UpdateSeuratObject(seur)
-    showNotification(paste0("Update complete"), type = 'message')
-  }
-  
-  # make sure percent.mito is added to the object
-  if(any(names(seur@assays)=='RNA')){
-    DefaultAssay(seur) <- 'RNA'
-  }
-  if(any(colnames(seur@meta.data) == 'percent.mito') == FALSE){
-    if(any(grepl('^MT-', rownames(seur)))){
-      seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^MT-')
-    }else if(any(grepl('^mt-', rownames(seur)))){
-      seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^mt-')
-    }else if(any(grepl("^Mt-", rownames(seur)))){
-      seur$percent.mito <- PercentageFeatureSet(seur, pattern = '^Mt-')
-    }else{
-      seur$percent.mito <- 0
-      showNotification(paste0("Mitochondrial genes were not identified."), type = 'warning')
-    }
-  }
-  
-  project_dir <- paste0(dir,'/')
-  
-  #down_sample <- round(6000/length(unique(seur$seurat_clusters)))
-  #seur <- subset(seur, downsample = down_sample, idents = 'seurat_clusters')
-  # if(dim(seur)[2]>6000){
-  #   seur <- subset(seur, cells = sample(Cells(seur), 6000))
-  # }
-  
-  assays <- names(seur@assays)
-  
-  if(length(assays)>1){
-    dims <- lapply(seur@assays, function(x){
-      return(dim(x@data))
-    })
-    names(dims) <- assays
-    assay_index <- NULL
-    if(any(names(assays)=="RNA" & dims[["RNA"]][2] > 0)){
-      for(i in 1:length(dims)){
-        if(dims[[i]][2]!=dims[["RNA"]][2]){
-          showNotification(paste0("Warning: the ", assays[i], "assay does not have the same number of cells (",dims[[i]][2],") as the RNA assay (", dims[["RNA"]][2],") and will be removed."), type = 'warning')
-          assay_index <- c(assay_index,i)
-        }
-      }
-    }else{
-      first_assay <- dims[[1]][2]
-      for(i in 2:length(dims)){
-        if(first_assay!=dims[[i]][2]){
-          showNotification(paste0("Warning: the ", assays[i], "assay does not have the same number of cells (",dims[[i]][2],") as the reference assay (", assay[1],": ",dims[["RNA"]][2],") and will be removed."), type = 'warning')
-          assay_index <- c(assay_index,i)
-        }
-      }
-    }
-    if(!is.null(assay_index)){
-      assays <- assays[-assay_index] 
-    }
-  }
-  
-  for(assay in assays){
-    DefaultAssay(seur) <- assay
-    
-    filename <- paste0(project_dir,assay,".loom")
-    loomR::create(filename = filename, data = seur[[assay]]@data, calc.count = F, overwrite = T)
-    data <- loomR::connect(filename = filename, mode = "r+")
-    data$link_delete('row_attrs/Gene')
-    
-    # add metadata
-    meta.data <- seur@meta.data
-    colnames(meta.data) <- paste0(colnames(meta.data),"_meta_data")
-    
-    data$add.col.attribute(as.list(meta.data))
-    data$add.row.attribute(list(features = rownames(seur[[assay]])))
-    
-    # add reduction embeddings
-    reduction_names <- names(seur@reductions)
-    for(i in 1:length(reduction_names)){
-      reductions <- as.data.frame(seur@reductions[[i]]@cell.embeddings)
-      if(nrow(reductions)==0){
-        showNotification(paste0("Warning: There was no data found for the ", reduction_names[i], " reduction. Skipping this reduction."), type = 'warning')
-        next
-      }
-      assay_used <- tolower(seur@reductions[[i]]@assay.used)
-      #if(!grepl(paste0('(?![a-z])(?<![a-z])(',assay_used,')'),reduction_names[i],perl = T,ignore.case = T)){
-      if(!grepl(assay_used,reduction_names[i], ignore.case = T)){
-        reduction_names[i] <- paste0(reduction_names[i],'_',assay_used)
-      }
-      n <- ncol(reductions)
-      if(n>3){
-        for(j in 2:3){
-          tmp <- reductions[,1:j]
-          tmp_name <- reduction_names[i]
-          if(!grepl(paste0('(?![a-z])(?<![a-z])(',j,'d)'),tmp_name,perl=T,ignore.case = T)){
-            tmp_name <- paste0(tmp_name,'_',j,'d')
-          }
-          if(grepl(' ', tmp_name)){
-            tmp_name <- gsub(' ','_',tmp_name)
-          }
-          colnames(tmp) <- paste0(tmp_name,'_',1:j,'_reduction')
-          data$add.col.attribute(as.list(tmp))
-        }
-      }else{
-        if(!grepl(paste0('(?![a-z])(?<![a-z])(',n,'d)'),reduction_names[i],perl=T,ignore.case = T)){
-          reduction_names[i] <- paste0(reduction_names[i],'_',n,'d')
-        }
-        if(grepl(' ', reduction_names[i])){
-          reduction_names[i] <- gsub(' ','_',reduction_names[i])
-        }
-        colnames(reductions) <- paste0(reduction_names[i],'_',1:n,'_reduction')
-        data$add.col.attribute(as.list(reductions))
-      }
-    }
-    data$close_all()
-  }
-  return(1)
-}
-
 try_seurat_update <- function(seur){
   tryCatch(
     {
@@ -359,71 +98,71 @@ try_seurat_update <- function(seur){
   )
 }
 
-detect_legacy_scap <- function(loom){
-  col <- names(loom[[1]][['col_attrs']])
-  if(any(grepl("_meta_data$", col)) && any(grepl("_reduction$", col))){
-    return(1)
-  }else{
-    return(0)
-  }
-}
-
-scap_to_h5ad <- function(in_file, out_path, old_file, modality = "RNA"){
-  anndata <- import('anndata')
-  if(grepl("\\.rds$", in_file, ignore.case = TRUE)){
-    obj <- readRDS(in_file)
-  }else if(grepl("\\.loom$", in_file, ignore.case = TRUE)){
-    obj <- connect(in_file)
-  }else{
-    return(0)
-  }
-  if(identical(class(obj)[1], "Seurat")){
-    obj <- UpdateSeuratObject(obj)
-    message("Converting to H5Seurat")
-    SaveH5Seurat(obj, filename = sub("\\.h5ad$", ".h5Seurat", out_path))
-    message("Converting to H5ad")
-    Convert(sub("\\.h5ad$", ".h5Seurat", out_path), dest = "h5ad", assay = modality)
-  }else if(identical(class(obj)[1], "loom")){
-    legacy <- detect_legacy_scap(list(obj))
-    if(legacy){
-      if(is.null(old_file)){
-        return(-1)
-      }else{
-        old_obj <- readRDS(old_file)
-        if(identical(class(old_obj)[1], 'Seurat')){
-          seur <- loomToSeurat_legacy(old_obj, list(obj))
-          if(identical(seur, -1)){
-            return(-2)
-          }else{
-            seur <- UpdateSeuratObject(seur)
-            message("Converting to H5Seurat")
-            SaveH5Seurat(seur, filename = sub("\\.h5ad$", ".h5Seurat", out_path))
-            message("Converting to H5ad")
-            Convert(sub("\\.h5ad$", ".h5Seurat", out_path), dest = "h5ad", assay = modality)
-          }
-        }else{
-          return(-3)
-        }
-      }
-    }else{
-      lf <- anndata$read_loom(file)
-      lf$write(out_path)
-    }
-  }else{
-    return(-4)
-  }
-  #------ required to fix anndata.write ValueError: '_index' is a reserved name for dataframe columns. Above error raised while writing key 'raw/var' of <class 'h5py._hl.files.File'> from /. ------#
-  cat(file = stderr(), "raw/var correction...\n")
-  a = anndata$read(out_path)
+anndata_write_fix <- function(file){
+  ad <- import('anndata')
+  a = ad$read(file)
   py$tmp = a
   py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].rename(columns={'_index': 'features'})")
   a = py$tmp
-  a$write(out_path)
-  #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------#
-  return(1)
+  a$write(file)
 }
 
+loom_to_h5ad <- function(file_1, file_2){
+  message("Converting to h5ad")
+  ad <- import('anndata')
+  ad$read_loom(file_1)$write(file_2)
+  #anndata_write_fix(file_2)
+}
 
+rds_to_h5ad <- function(file_1, file_2){
+  obj <- readRDS(file_1)
+  obj <- try_seurat_update(obj)
+  assays <- names(obj@assays)
+  message("Converting to h5seurat")
+  for(assay in assays){
+    print(length(obj[[assay]]@var.features))
+    if(length(obj[[assay]]@var.features) == 0){
+      obj <- FindVariableFeatures(obj)
+    }
+  }
+  SaveH5Seurat(obj, filename = gsub("\\.h5ad$", ".h5Seurat", file_2), overwrite = TRUE)
+  message("Converting to h5ad")
+  for(assay in assays){
+    message(paste0("Converting ", assay, "..."))
+    Convert(gsub("\\.h5ad$", ".h5Seurat", file_2), dest = "h5ad", assay = assay, overwrite = TRUE)
+    system(paste0("mv ", file_2, " ", paste0(gsub("\\.h5ad", "", file_2), "_", assay, '.h5ad')))
+  }
+  #anndata_write_fix(file_2)
+}
+
+h5ad_to_rds <- function(file_1, file_2){
+  message("Converting to h5seurat")
+  Convert(file_1, dest = "h5seurat", overwrite = TRUE)
+  message("Converting to rds")
+  seur <- LoadH5Seurat(sub("\\.h5ad$", '.h5seurat', file_1))
+  saveRDS(seur, file_2)
+}
+
+SCAP_Convert <- function(from, to, file_1, file_2){
+  if(from == 'loom' & to == 'h5ad'){
+    loom_to_h5ad(file_1, file_2)
+  }else if(from == 'rds' & to == 'h5ad'){
+    rds_to_h5ad(file_1, file_2)
+  }else if(from == 'h5ad' & to == 'rds'){
+    h5ad_to_rds(file_1, file_2)
+  }else{
+    message('error')
+  }
+}
+
+# #------ required to fix anndata.write ValueError: '_index' is a reserved name for dataframe columns. Above error raised while writing key 'raw/var' of <class 'h5py._hl.files.File'> from /. ------#
+# cat(file = stderr(), "raw/var correction...\n")
+# a = anndata$read(out_path)
+# py$tmp = a
+# py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].rename(columns={'_index': 'features'})")
+# a = py$tmp
+# a$write(out_path)
+# #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------#
 
 reorder_levels <- function(x){
   if(!is.factor(x)){
