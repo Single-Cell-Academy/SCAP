@@ -2,6 +2,8 @@
 
 We have added this News tab to the SCAP app. Come back here to find the newest updates and functions we have implemented into SCAP!
 
+### **2021-07-14 (0.2.2) : Fixed bugs that caused gene names or metadata to be turned into numbers in certain situations. ** 
+
 ### **2021-06-24 (v0.2.0 + v0.2.1) : Major update to file conversion module and fixed an issue with annotation.**
 
 ### **2021-06-23 (v0.1.2): Updated docker and internal R version used from 4.0.4 to 4.1.0**
