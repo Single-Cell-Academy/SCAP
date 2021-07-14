@@ -2,55 +2,103 @@
 tabPanel(
   "File Conversion",
   sidebarPanel(
-    fluidRow(
-      style = 'padding:10px',
-      column(
-        width = 6,
-        selectInput('from', label = 'From', choices = c('rds', 'h5ad', 'loom'), selected = 'rds', multiple = FALSE)
+    tabsetPanel(
+      tabPanel(
+        'Seurat/Scanpy to Loom',
+        fluidRow(
+          style = 'padding:10px',
+          shinyFilesButton(id = "object_file", label = "Choose Seurat (.rds) / Scanpy (/.h5/.h5ad) Object to Convert ", title = "Choose Seurat (.rds) / Scanpy (/.h5/.h5ad) Object to Convert", multiple = F, style = "width:100%")
+        ),
+        fluidRow(
+          style = 'padding:10px',
+          shinyDirButton(id = "new_directory", label = "Select Directory", title = "Choose where to save converted loom files. The slected directory should be a new directory or empty", style = "width:100%")
+        ),
+        fluidRow(
+          style = 'padding:10px',
+          actionButton(inputId = 'sl_convert', label = 'Convert', icon = icon('arrow-circle-down'), style = "width:100%")
+        ),
+        fluidRow(
+          conditionalPanel(
+            condition = 'input.object_file',
+            h3('Selected file:'),
+            h4(textOutput(outputId = 'chosen_object_file')),
+            h4(textOutput(outputId = 'notes'))
+          )
+        ),
+        fluidRow(
+          conditionalPanel(
+            condition = 'input.new_directory',
+            h3('Selected directory:'),
+            h4(textOutput(outputId = 'chosen_new_directory'))
+          )
+        )
       ),
-      column(
-        width = 6, 
-        selectInput('to', label = 'To', choices = c('rds', 'h5ad'), 'h5ad', multiple = FALSE)
+      tabPanel(
+        "Loom to Seurat",
+        conditionalPanel(
+          condition = '!input.assay_1', 
+          h2('Please Select Your Dataset on the Main Tab', style = 'text-align: center; font-style: italic;')
+        ),
+        conditionalPanel(
+          condition = 'input.assay_1',
+          fluidRow(
+            style = "padding:10px",
+            h3("Update the meta data of a Seurat object or create a new one"),
+            radioButtons('overwrite', label = "Overwrite original Seurat object with new meta data", choices = c("yes", "no"), inline = T),
+            conditionalPanel(
+              condition = "input.overwrite=='no'",
+              textInput('new_file_name', label = 'File name', value = NA, placeholder = "Enter the name of the updated/new Seurat file")
+            )
+          ),
+          fluidRow(
+            style = "padding:10px",
+            shinyFilesButton(id = "update_file", label = "Choose Original Seurat Object", title = "Choose Seurat Object to Convert", multiple = F, style = "width:100%")
+          ),
+          fluidRow(
+            style = "padding:10px",
+            shinyDirButton(id = "new_directory_2", label = "Select Directory", title = "Choose where to save the updated Seurat file", style = "width:100%")
+          ),
+          fluidRow(
+            style = "padding:10px",
+            actionButton(inputId = 'ls_convert', label = 'Convert', icon = icon('arrow-circle-down'), style = "width:100%")
+          ),
+          fluidRow(
+            h3('Selected file:'),
+            h4(textOutput(outputId = 'chosen_update_file')),
+            h3('Selected directory:'),
+            h4(textOutput(outputId = 'chosen_new_directory_2'))
+          )
+        )
+      ),
+      tabPanel(
+        "To h5ad",
+        fluidRow(
+          style = "padding:10px",
+          h3("Convert loom or Seurat to h5ad"),
+          shinyFilesButton(id = "in_file_to_h5ad", label = "Choose File to Convert", title = "Choose File to Convert", multiple = F, style = "width:100%"),
+          textInput('out_file_to_h5ad', label = 'File name for h5ad Output', value = NA, placeholder = "Save h5ad File As"),
+          shinyDirButton(id = "out_dir_to_h5ad", label = "Select where to save h5ad file", title = "Select where to save h5ad file", style = "width:100%"),
+          radioButtons('is_legacy', label = "Legacy Conversion?", choices = c("yes", "no"), selected = "no", inline = T),
+          conditionalPanel(
+            condition = "input.is_legacy=='yes'",
+            shinyFilesButton(id = "legacy_file_to_h5ad", label = "Choose Original Seurat Object", title = "Choose Original Seurat Object for Legacy Conversion", multiple = F, style = "width:100%")
+          ),
+          actionButton(inputId = 'to_h5ad', label = 'Convert', icon = icon('arrow-circle-down'), style = "width:100%")
+        ),
+        fluidRow(
+          h3('Selected file:'),
+          h4(textOutput(outputId = 'chosen_in_file_to_h5ad')),
+          h3('Selected out file:'),
+          h4(textOutput(outputId = 'chosen_out_file_to_h5ad')),
+          h3('Selected directory:'),
+          h4(textOutput(outputId = 'chosen_out_dir_to_h5ad')),
+          h3('Selected legacy file:'),
+          h4(textOutput(outputId = 'chosen_legacy_file_to_h5ad'))
+        )
       )
-    ),
-    fluidRow(
-      style = 'padding:10px',
-      shinyFilesButton(id = "file_1", label = "Choose a Seurat (.rds), Scanpy (.h5ad) or Loom (.loom) Object to Convert", title = "Choose a Seurat (.rds), Scanpy (.h5ad) or Loom (.loom) Object to Convert", multiple = F, style = "width:100%")
-    ),
-    fluidRow(
-      style = 'padding:10px',
-      shinyDirButton(id = "out_dir_2", label = "Select Directory", title = "Choose where to save the converted file", style = "width:100%")
-    ),
-    fluidRow(
-      style = 'padding:10px',
-      textInput('out_file_2', label = 'Name converted file.\nIf multiple assays are present, assay names will automatically be appended to chosen file name')
-    ),
-    fluidRow(
-      style = 'padding:10px',
-      actionButton(inputId = 'scap_convert', label = 'Convert', icon = icon('arrow-circle-down'), style = "width:100%")
     )
   ),
   mainPanel(
-    fluidRow(
-      conditionalPanel(
-        condition = 'input.file_1',
-        h3('Selected input file:'),
-        h4(textOutput(outputId = 'chosen_in_file'))
-      )
-    ),
-    fluidRow(
-      conditionalPanel(
-        condition = 'input.out_dir_2',
-        h3('Selected output directory:'),
-        h4(textOutput(outputId = 'chosen_out_directory'))
-      )
-    ),
-    fluidRow(
-      conditionalPanel(
-        condition = 'input.out_file_2',
-        h3('Selected output file:'),
-        h4(textOutput(outputId = 'chosen_out_file'))
-      )
-    )
+    #h1('Stuff Goes Here')
   )
 )
