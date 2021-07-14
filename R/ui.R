@@ -17,7 +17,6 @@ version_number <-  strsplit(grep('Version', readLines("../DESCRIPTION"), fixed =
   collapsible = TRUE,
   theme = shinytheme('cosmo'),
   title = paste("Single Cell Analysis Portal v.",version_number,sep =""),
-
   ## Dashboard components (TabPanels) found in /ui
   source(file.path("ui", "main.R"),  local = TRUE)$value,
   source(file.path("ui", "cell_annotation.R"),  local = TRUE)$value,

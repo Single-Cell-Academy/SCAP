@@ -4,11 +4,12 @@ library("ggplot2")
 library("ggthemes")
 library("gtools")
 library("Matrix")
+library("MODIS")
 library("plotly")
 library("rjson")
 library("shiny")
 library("shinyFiles")
-# library("data.table")
+library("data.table")
 library("scibet")
 library("readr")
 library("reactable")
@@ -134,7 +135,7 @@ server <- function(input, output, session){
     }
       
     init <<- 0
-    output$markers <- NULL
+
     ## Hide differential expression panels and reset input values
     shinyjs::hide("de_results")
     ## Show message when no DE has been calculated (i.e. a new dataset loaded)

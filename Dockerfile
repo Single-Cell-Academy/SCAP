@@ -1,5 +1,5 @@
 # Base image https://hub.docker.com/u/rocker/
-FROM rocker/shiny-verse:4.1.0
+FROM rocker/shiny-verse:4.0.4
 
 # system libraries of general use
 ## install debian packages
