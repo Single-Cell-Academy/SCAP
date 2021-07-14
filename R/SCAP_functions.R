@@ -117,6 +117,13 @@ loom_to_h5ad <- function(file_1, file_2){
 rds_to_h5ad <- function(file_1, file_2){
   obj <- readRDS(file_1)
   obj <- try_seurat_update(obj)
+  #convert factors to characters
+  idx <- which(unlist(lapply(obj@meta.data, class)) == 'factor')
+  if(length(idx)>0){
+    for(i in idx){
+      obj@meta.data[,i] <- as.character(obj@meta.data[,i,drop=TRUE])
+    }
+  }
   assays <- names(obj@assays)
   message("Converting to h5seurat")
   for(assay in assays){

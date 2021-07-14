@@ -82,15 +82,20 @@ server <- function(input, output, session){
     names(data) <- assays
     ## Check if RAW Anndata object is present or not. If not present, use the main object
     if(is.null(data[[1]]$raw)){ 
-      rvalues$features <- rownames(data[[1]]$var)
+      if(any(is.na(as.numeric(rownames(data[[1]]$var))))){ # check if var rownames are numeric or gene names
+        rvalues$features <- rownames(data[[1]]$var)
+      }else if(any(grepl('features', colnames(data[[1]]$var), ignore.case = TRUE))){ # if numeric, is there a column in var called features?
+        rvalues$features <- data[[1]]$var[,grep('features', colnames(data[[1]]$var), ignore.case = TRUE)[1],drop=TRUE]
+      }else{ # if not, us the first column of var as feature names
+        rvalues$features <- data[[1]]$var[,1,drop=TRUE]
+      }
     }else{
-      test_gene_name <- rownames(data[[1]]$var)[1]
-      if(test_gene_name %in% rownames(data[[1]]$raw$var)){ # check if rownames are numbers or gene names
+      if(any(is.na(as.numeric(rownames(data[[1]]$raw$var))))){ # check if var rownames are numeric or gene names
         rvalues$features <- rownames(data[[1]]$raw$var)
-      }else if("features" %in% colnames(data[[1]]$raw$var)){ ## Check if there is a column named features in raw
-        rvalues$features <- data[[1]]$raw$var$features
-      }else if(test_gene_name %in% data[[1]]$raw$var[,1]){ # otherwise, check if the first column contains rownames
-        rvalues$features <- data[[1]]$raw$var[,1]
+      }else if(any(grepl('features', colnames(data[[1]]$raw$var), ignore.case = TRUE))){ # if numeric, is there a column in var called features?
+        rvalues$features <- data[[1]]$raw$var[,grep('features', colnames(data[[1]]$raw$var), ignore.case = TRUE)[1],drop=TRUE]
+      }else{ # if not, us the first column of var as feature names
+        rvalues$features <- data[[1]]$raw$var[,1,drop=TRUE]
       }
     }
     rvalues$obs <- data[[1]]$obs_keys()
