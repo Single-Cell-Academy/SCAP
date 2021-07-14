@@ -1,4 +1,7 @@
 # SCAP
+
+[![Docker dev container](https://github.com/Single-Cell-Academy/SCAP/actions/workflows/main.yml/badge.svg)](https://github.com/Single-Cell-Academy/SCAP/actions/workflows/main.yml)
+
 An Rshiny portal for analysis of scRNA-seq data
 
 # Updates & NEWS
