@@ -85,7 +85,7 @@ output$do_split <- renderUI({
 output$split_by <- renderUI({
   req(input$assay_1, rvalues$obs)
   choices <- unlist(lapply(rvalues$obs[which(rvalues$obs_cat)], function(x){
-    if(length(unique(rvalues$h5ad[[1]]$obs[x][,,drop=TRUE]))>1){
+    if(length(unique(rvalues$h5ad[[1]]$obs[x][,1,drop=TRUE]))>1){
       return(x)
     }
   }))
@@ -107,7 +107,7 @@ outputOptions(output, "grouping_1_type", suspendWhenHidden = FALSE)
 #-- dimensional reduction plot coloured by cell groups --#
 output$dimplot_1 <- renderPlotly({
   req(input$grouping_1, input$reduction_1)
-  group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
+  group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,1,drop=TRUE])
   names(group.by) <- input$grouping_1
   names(group.by[[1]]) <- rvalues$cell_ids
   cat <- rvalues$obs_cat[which(rvalues$obs == input$grouping_1)]
@@ -118,7 +118,7 @@ output$dimplot_1 <- renderPlotly({
                     annot_panel = "", 
                     low.res = 'yes')
   }else{
-    feature.in <- rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=FALSE]
+    feature.in <- rvalues$h5ad[[1]]$obs[input$grouping_1][,1,drop=FALSE]
     colnames(feature.in) <- input$grouping_1
     rownames(feature.in) <- rownames(rvalues$reductions[[input$reduction_1]])
     featurePlotlyOutput(assay.in = input$assay_1,
@@ -132,7 +132,7 @@ output$dimplot_1 <- renderPlotly({
 #-- dimensional reduction plot coloured by feature expression --#
 output$featureplot_1 <- renderPlotly({
   req(input$grouping_1, input$reduction_1, input$featureplot_1_feature_select)
-  group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE])
+  group.by <- list(rvalues$h5ad[[1]]$obs[input$grouping_1][,1,drop=TRUE])
   names(group.by) <- input$grouping_1
   names(group.by[[1]]) <- rvalues$cell_ids
   if(rvalues$raw_dtype == "NULL" | rvalues$raw_dtype == "counts"){
@@ -190,10 +190,10 @@ dot_plot <- reactive({
   }
   colnames(data.features) <- input$dotplot_1_feature_select
   rownames(data.features) <- rownames(rvalues$reductions)
-  data.features$id <- rvalues$h5ad[[1]]$obs[input$grouping_1][,,drop=TRUE]
+  data.features$id <- rvalues$h5ad[[1]]$obs[input$grouping_1][,1,drop=TRUE]
   
   if(input$do_split == 'yes' & !is.null(input$split_by)){
-    splits = list(rvalues$h5ad[[1]]$obs[input$split_by][,,drop=TRUE])
+    splits = list(rvalues$h5ad[[1]]$obs[input$split_by][,1,drop=TRUE])
     names(splits) <- input$split_by
     p <- split_dot_plot(data.features = data.features, features = input$dotplot_1_feature_select, assay = assay, split.by = splits)
     if(is.null(p)) return(NULL)
