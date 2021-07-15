@@ -26,9 +26,9 @@ output$grouping_1 <- renderUI({
   req(input$assay_1, rvalues$obs)
   assay <- input$assay_1
   if(any(grepl("seurat_clusters", rvalues$obs, ignore.case = TRUE))){
-    sel <- rvalues$obs[grep("seurat_clusters", rvalues$obs, , ignore.case = TRUE)]
+    sel <- rvalues$obs[grep("seurat_clusters", rvalues$obs, ignore.case = TRUE)]
   }else if(any(grepl(paste0(tolower(assay),"_clusters"), rvalues$obs, ignore.case = TRUE))){
-    sel <- rvalues$obs[grep(paste0(tolower(assay),"_clusters"), rvalues$obs, , ignore.case = TRUE)]
+    sel <- rvalues$obs[grep(paste0(tolower(assay),"_clusters"), rvalues$obs, ignore.case = TRUE)]
   }else if(any(grepl("louvain", rvalues$obs, ignore.case = TRUE))){
     sel <- rvalues$obs[grep("louvain", rvalues$obs, ignore.case = TRUE)]
   }else{
