@@ -86,16 +86,20 @@ server <- function(input, output, session){
         rvalues$features <- rownames(data[[1]]$var)
       }else if(any(grepl('features', colnames(data[[1]]$var), ignore.case = TRUE))){ # if numeric, is there a column in var called features?
         rvalues$features <- data[[1]]$var[,grep('features', colnames(data[[1]]$var), ignore.case = TRUE)[1],drop=TRUE]
+        rownames(data[[1]]$var) <- rvalues$features
       }else{ # if not, us the first column of var as feature names
         rvalues$features <- data[[1]]$var[,1,drop=TRUE]
+        rownames(data[[1]]$var) <- rvalues$features
       }
     }else{
       if(any(is.na(as.numeric(rownames(data[[1]]$raw$var))))){ # check if var rownames are numeric or gene names
         rvalues$features <- rownames(data[[1]]$raw$var)
       }else if(any(grepl('features', colnames(data[[1]]$raw$var), ignore.case = TRUE))){ # if numeric, is there a column in var called features?
         rvalues$features <- data[[1]]$raw$var[,grep('features', colnames(data[[1]]$raw$var), ignore.case = TRUE)[1],drop=TRUE]
+        rownames(data[[1]]$var) <- rvalues$features
       }else{ # if not, us the first column of var as feature names
         rvalues$features <- data[[1]]$raw$var[,1,drop=TRUE]
+        rownames(data[[1]]$var) <- rvalues$features
       }
     }
     rvalues$obs <- data[[1]]$obs_keys()
