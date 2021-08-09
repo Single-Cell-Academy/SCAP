@@ -110,8 +110,19 @@ anndata_write_fix <- function(file){
 loom_to_h5ad <- function(file_1, file_2){
   message("Converting to h5ad")
   ad <- import('anndata')
-  ad$read_loom(file_1)$write(file_2)
-  #anndata_write_fix(file_2)
+  a = ad$read_loom(file_1)
+  if(length(a$obsm_keys()) == 0){
+    reductions <- a$obs_keys()[grep("_reduction$", a$obs_keys())]
+    if(length(reductions) == 0){
+      print('No dimensional reductions found in data')
+    }else{
+      reduction_names <- unique(sub("_\\d_reduction$", "", reductions))
+      reduction_lst <- lapply(reduction_names, function(x) reductions[grep(x, reductions)])
+      names(reduction_lst) <- reduction_names
+      a = ad$read_loom(file_1, obsm_names = reduction_lst)
+    }
+  }
+  a$write(file_2)
 }
 
 rds_to_h5ad <- function(file_1, file_2){
