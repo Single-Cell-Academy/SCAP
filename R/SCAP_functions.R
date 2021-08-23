@@ -50,6 +50,16 @@ COLORPAL_DISCRETE <- c("#000000", "#FFFF00", "#1CE6FF", "#FF34FF", "#FF4A46", "#
 "#3C3E6E", "#D83D66", "#2F5D9B", "#6C5E46", "#D25B88", "#5B656C", "#00B57F", "#545C46", 
 "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B")
 
+use_raw <- function(h5ad){
+  if(is.null(h5ad$raw)){
+    return(FALSE) # no raw slot, don't use raw
+  }else if(sum(h5ad$raw$X[1,]) %% 1 == 0){
+    return(FALSE) # raw slot contains int counts, don't use raw
+  }else{
+    return(TRUE) # raw exists and doesn't contain int counts, use raw
+  }
+}
+
 check_if_obs_cat <- function(obs_df){
   len <- nrow(obs_df)
   uni <- apply(obs_df, 2, function(x){length(unique(x))})

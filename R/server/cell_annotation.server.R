@@ -135,7 +135,7 @@ observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handler
       
       rvalues$h5ad[[1]]$obs['scap_find_markers_groups'] <- reorder_levels(y) # add cell identities to main object so scanpy methods can be used
       
-      scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = TRUE, method = 'wilcoxon') # find DEGs
+      scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = use_raw(rvalues$h5ad[[1]]), method = 'wilcoxon') # find DEGs
       
       t <- rank_genes_groups_df(rvalues$h5ad[[1]]) # Create a dataframe of DE results
       t$group <- py_to_r(attr(t, which='pandas.index')$tolist()) # some crpytic code that's required so an error doesn't occur
