@@ -2,7 +2,7 @@ name: CI Push to Dockerhub on release
 
 on:
  release:
-   branches: master
+  types: published
 
 jobs:
   main:
