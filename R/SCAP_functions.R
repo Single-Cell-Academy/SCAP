@@ -377,7 +377,7 @@ dotPlot <- function(
 }
 
 ######## dimPlotlyOutput #######
-dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tmp_annotations = NULL, low.res){
+dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tmp_annotations = NULL, low.res, hide.legend){
 
   n <- length(colnames(reduc.in))
   if(n<2 || n>3){
@@ -452,10 +452,14 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   }
 
   if(low.res == 'yes'){
-    return(p %>% toWebGL())
-  }else{
-    return(p)
+    p <- p %>% toWebGL()
   }
+  
+  if(hide.legend == 'Yes'){
+    p <- p %>% layout(showlegend = FALSE)
+  }
+  
+  return(p)
 }
 
 ####### featurePlotlyOutput ##########
