@@ -20,7 +20,7 @@ observeEvent(input$h5ad_in_mod, {
   if(is.null(data)) return(NULL)
   if(length(data) != length(assays)) return(NULL)
   if(length(unlist(lapply(data, function(x){x}))) != length(assays)) return(NULL)
-  if((length(data[[1]]$obs_names$values) != length(rvalues$h5ad[[1]]$obs_names$values)) || (all(as.character(data[[1]]$obs_names$values) == as.character(rvalues$h5ad[[1]]$obs_names$values)) == FALSE)){
+  if((length(data[[1]]$obs_names) != length(rvalues$h5ad[[1]]$obs_names)) || (all(as.character(data[[1]]$obs_names) == as.character(rvalues$h5ad[[1]]$obs_names)) == FALSE)){
     showModal(modalDialog(p(paste0("Cell mismatch error. Not all cell IDs from ", h5ad_files[i], " match the cell IDs from ", rvalues$path_to_data, ".")), title = "Error connecting to h5ad file."), session = getDefaultReactiveDomain())
     return(NULL)
   }

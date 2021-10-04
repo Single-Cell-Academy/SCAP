@@ -55,11 +55,11 @@ tabPanel(
               ),
               fluidRow(
                 column(
-                  width = 3,
+                  width = 4,
                   radioButtons('hidelegend_2', label = 'Hide Legend', choices = c('Yes','No'), selected = 'No', inline = TRUE)
                 ),
                 column(
-                  width = 9,
+                  width = 8,
                   uiOutput('reduction_2', style = 'padding: 10px')
                 )
               )
