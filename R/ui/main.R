@@ -70,7 +70,14 @@ tabPanel(
             plotlyOutput('dimplot_1', height = '400px') %>% withSpinner(color="black", proxy.height = '400px')
           ),
           fluidRow(
-            uiOutput('reduction_1', style = 'padding: 10px')
+            column(
+              width = 3,
+              radioButtons('hidelegend_1', label = 'Hide Legend', choices = c('Yes','No'), selected = 'No', inline = TRUE)
+            ),
+            column(
+              width = 9,
+              uiOutput('reduction_1', style = 'padding: 10px')
+            )
           )
         )
       ),

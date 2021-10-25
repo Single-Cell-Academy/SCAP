@@ -88,7 +88,8 @@ output$dimplot_2 <- renderPlotly({
                   group.by = group.by, 
                   annot_panel = input$annot_panel, 
                   tmp_annotations = rvalues$tmp_annotations, 
-                  low.res = 'yes')
+                  low.res = 'yes',
+                  hide.legend = input$hidelegend_2)
 })
 
 #-- dimensional reduction plot coloured by feature expression --#
