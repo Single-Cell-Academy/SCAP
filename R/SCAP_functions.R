@@ -654,26 +654,31 @@ split_dot_plot <- function(data.features = NULL,
   data.plot$split <- as.factor(data.plot$split)
   
   data.plot$id <- reorder_levels(data.plot$id)
-  
+
   labels <- data.frame(features.plot = rep(levels(data.plot$features.plot),length(levels(data.plot$split))))
-  labels$id <- rep(levels(data.plot$id)[length(levels(data.plot$id))], nrow(labels))
+  labels$avg.exp <- 0
+  labels$pct.exp <- NA
+  labels$avg.exp.scaled <- data.plot$avg.exp.scaled[1]
+  labels$id <- as.factor('ZZZZZZ')
   labels <- labels[order(labels$features.plot),]
   labels$split <- rep(levels(data.plot$split),nrow(labels)/length(levels(data.plot$split)))
   
   labels$features.plot <- as.factor(labels$features.plot)
   labels$id <- as.factor(labels$id)
   labels$split <- as.factor(labels$split)
-  labels$y <- as.factor('ZZZZZZ') #length(levels(data.plot$id))+1
   
+  data.plot <- rbind(data.plot, labels[,c(2,3,1,4:ncol(labels))])
+  tmp <<- data.plot
+  tmp_labs <<- labels
   p <- ggplot(data = data.plot, mapping = aes(x = features.plot, y = id)) + 
     geom_point(aes(color = avg.exp.scaled, size = pct.exp, group = split), position = position_dodge(1))  +
-    geom_text(data = labels, aes(x = features.plot, y = y, label = split, group = split), position = position_dodge(width = 1), size=5) + 
-    scale_y_discrete(breaks = as.factor(levels(data.plot$id))) +
+    geom_text(data = data.plot[which(data.plot$id == "ZZZZZZ"),], aes(label = split, group = split), position = position_dodge(width = 1), size=5) + 
+    scale_y_discrete(breaks = levels(data.plot$id)[1:(length(levels(data.plot$id))-1)]) +
     scale_color_gradient(low = 'blue', high = 'red') + 
     xlab('Features') +
     ylab('Identity') +
     theme_base()
-  
+  tmp_p <<- p
   #print('layer_1:')
   #print(layer_data(p,1))
   layer <- layer_data(p,2)
@@ -696,7 +701,6 @@ split_dot_plot <- function(data.features = NULL,
       start <- start+1
     }
   }
-  
   cnt <- 1
   #print('l_data:')
   while(cnt<1000){
@@ -708,6 +712,7 @@ split_dot_plot <- function(data.features = NULL,
       break
     }
   }
+  tmp_p_2 <<- p
   return(p)
 }
 
