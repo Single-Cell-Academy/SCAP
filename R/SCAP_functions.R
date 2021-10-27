@@ -132,6 +132,9 @@ loom_to_h5ad <- function(file_1, file_2){
       a = ad$read_loom(file_1, obsm_names = reduction_lst)
     }
   }
+  if(!grepl("\\.h5ad", file_2)){
+    file_2 <- paste0(file_2, ".h5ad")
+  }
   a$write(file_2)
 }
 
@@ -153,14 +156,17 @@ rds_to_h5ad <- function(file_1, file_2){
       obj <- FindVariableFeatures(obj)
     }
   }
+  if(!grepl("\\.h5ad", file_2)){
+    file_2 <- paste0(file_2, ".h5ad")
+  }
   SaveH5Seurat(obj, filename = gsub("\\.h5ad$", ".h5Seurat", file_2), overwrite = TRUE)
   message("Converting to h5ad")
   for(assay in assays){
     message(paste0("Converting ", assay, "..."))
     Convert(gsub("\\.h5ad$", ".h5Seurat", file_2), dest = "h5ad", assay = assay, overwrite = TRUE)
     system(paste0("mv ", file_2, " ", paste0(gsub("\\.h5ad", "", file_2), "_", assay, '.h5ad')))
+    anndata_write_fix(paste0(gsub("\\.h5ad", "", file_2), "_", assay, '.h5ad'))
   }
-  #anndata_write_fix(file_2)
 }
 
 h5ad_to_rds <- function(file_1, file_2){
@@ -168,6 +174,9 @@ h5ad_to_rds <- function(file_1, file_2){
   Convert(file_1, dest = "h5seurat", overwrite = TRUE)
   message("Converting to rds")
   seur <- LoadH5Seurat(sub("\\.h5ad$", '.h5seurat', file_1))
+  if(!grepl("\\.rds", file_2)){
+    file_2 <- paste0(file_2, ".rds")
+  }
   saveRDS(seur, file_2)
 }
 
