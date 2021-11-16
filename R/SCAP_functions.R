@@ -113,6 +113,10 @@ anndata_write_fix <- function(file){
   a = ad$read(file)
   py$tmp = a
   py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].rename(columns={'_index': 'features'})")
+  if(!all(rownames(a$var) %in% rownames(a$raw$var))){
+    py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].set_index('features', drop = False)")
+    py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].rename_axis(index = None)")
+  }
   a = py$tmp
   a$write(file)
 }
