@@ -1,6 +1,6 @@
 Package: SCAP
 Title: Single Cell Analysis Portal
-Version: 0.2.8
+Version: 0.2.9
 Authors@R: 
   c(person(given = "Florian",
            family = "Wuennemann",
