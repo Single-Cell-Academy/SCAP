@@ -116,7 +116,8 @@ output$dimplot_1 <- renderPlotly({
                     reduc.in = rvalues$reductions[[input$reduction_1]][,c(1,2)], 
                     group.by = group.by, 
                     annot_panel = "", 
-                    low.res = 'yes')
+                    low.res = 'yes',
+                    hide.legend = input$hidelegend_1)
   }else{
     feature.in <- rvalues$h5ad[[1]]$obs[input$grouping_1][,1,drop=FALSE]
     colnames(feature.in) <- input$grouping_1

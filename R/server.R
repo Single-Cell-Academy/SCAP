@@ -135,6 +135,7 @@ server <- function(input, output, session){
       rvalues$raw_dtype <- "counts"
     }else{ ## Only if the other two conditions fail, use raw values to calculate differential expression
       rvalues$raw_dtype <- "normalized"
+      data[[1]]$raw
     }
       
     init <<- 0

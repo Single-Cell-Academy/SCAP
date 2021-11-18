@@ -113,6 +113,10 @@ anndata_write_fix <- function(file){
   a = ad$read(file)
   py$tmp = a
   py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].rename(columns={'_index': 'features'})")
+  if(!all(rownames(a$var) %in% rownames(a$raw$var))){
+    py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].set_index('features', drop = False)")
+    py_run_string("tmp.__dict__['_raw'].__dict__['_var'] = tmp.__dict__['_raw'].__dict__['_var'].rename_axis(index = None)")
+  }
   a = py$tmp
   a$write(file)
 }
@@ -131,6 +135,9 @@ loom_to_h5ad <- function(file_1, file_2){
       names(reduction_lst) <- reduction_names
       a = ad$read_loom(file_1, obsm_names = reduction_lst)
     }
+  }
+  if(!grepl("\\.h5ad", file_2)){
+    file_2 <- paste0(file_2, ".h5ad")
   }
   a$write(file_2)
 }
@@ -153,14 +160,17 @@ rds_to_h5ad <- function(file_1, file_2){
       obj <- FindVariableFeatures(obj)
     }
   }
+  if(!grepl("\\.h5ad", file_2)){
+    file_2 <- paste0(file_2, ".h5ad")
+  }
   SaveH5Seurat(obj, filename = gsub("\\.h5ad$", ".h5Seurat", file_2), overwrite = TRUE)
   message("Converting to h5ad")
   for(assay in assays){
     message(paste0("Converting ", assay, "..."))
     Convert(gsub("\\.h5ad$", ".h5Seurat", file_2), dest = "h5ad", assay = assay, overwrite = TRUE)
     system(paste0("mv ", file_2, " ", paste0(gsub("\\.h5ad", "", file_2), "_", assay, '.h5ad')))
+    anndata_write_fix(paste0(gsub("\\.h5ad", "", file_2), "_", assay, '.h5ad'))
   }
-  #anndata_write_fix(file_2)
 }
 
 h5ad_to_rds <- function(file_1, file_2){
@@ -168,6 +178,9 @@ h5ad_to_rds <- function(file_1, file_2){
   Convert(file_1, dest = "h5seurat", overwrite = TRUE)
   message("Converting to rds")
   seur <- LoadH5Seurat(sub("\\.h5ad$", '.h5seurat', file_1))
+  if(!grepl("\\.rds", file_2)){
+    file_2 <- paste0(file_2, ".rds")
+  }
   saveRDS(seur, file_2)
 }
 
@@ -377,7 +390,7 @@ dotPlot <- function(
 }
 
 ######## dimPlotlyOutput #######
-dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tmp_annotations = NULL, low.res){
+dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tmp_annotations = NULL, low.res, hide.legend){
 
   n <- length(colnames(reduc.in))
   if(n<2 || n>3){
@@ -452,10 +465,14 @@ dimPlotlyOutput <- function(assay.in, reduc.in, group.by, annot_panel = NULL, tm
   }
 
   if(low.res == 'yes'){
-    return(p %>% toWebGL())
-  }else{
-    return(p)
+    p <- p %>% toWebGL()
   }
+  
+  if(hide.legend == 'Yes'){
+    p <- p %>% layout(showlegend = FALSE)
+  }
+  
+  return(p)
 }
 
 ####### featurePlotlyOutput ##########
@@ -650,26 +667,31 @@ split_dot_plot <- function(data.features = NULL,
   data.plot$split <- as.factor(data.plot$split)
   
   data.plot$id <- reorder_levels(data.plot$id)
-  
+
   labels <- data.frame(features.plot = rep(levels(data.plot$features.plot),length(levels(data.plot$split))))
-  labels$id <- rep(levels(data.plot$id)[length(levels(data.plot$id))], nrow(labels))
+  labels$avg.exp <- 0
+  labels$pct.exp <- NA
+  labels$avg.exp.scaled <- data.plot$avg.exp.scaled[1]
+  labels$id <- as.factor('ZZZZZZ')
   labels <- labels[order(labels$features.plot),]
   labels$split <- rep(levels(data.plot$split),nrow(labels)/length(levels(data.plot$split)))
   
   labels$features.plot <- as.factor(labels$features.plot)
   labels$id <- as.factor(labels$id)
   labels$split <- as.factor(labels$split)
-  labels$y <- as.factor('ZZZZZZ') #length(levels(data.plot$id))+1
   
+  data.plot <- rbind(data.plot, labels[,c(2,3,1,4:ncol(labels))])
+  tmp <<- data.plot
+  tmp_labs <<- labels
   p <- ggplot(data = data.plot, mapping = aes(x = features.plot, y = id)) + 
     geom_point(aes(color = avg.exp.scaled, size = pct.exp, group = split), position = position_dodge(1))  +
-    geom_text(data = labels, aes(x = features.plot, y = y, label = split, group = split), position = position_dodge(width = 1), size=5) + 
-    scale_y_discrete(breaks = as.factor(levels(data.plot$id))) +
+    geom_text(data = data.plot[which(data.plot$id == "ZZZZZZ"),], aes(label = split, group = split), position = position_dodge(width = 1), size=5) + 
+    scale_y_discrete(breaks = levels(data.plot$id)[1:(length(levels(data.plot$id))-1)]) +
     scale_color_gradient(low = 'blue', high = 'red') + 
     xlab('Features') +
     ylab('Identity') +
     theme_base()
-  
+  tmp_p <<- p
   #print('layer_1:')
   #print(layer_data(p,1))
   layer <- layer_data(p,2)
@@ -692,7 +714,6 @@ split_dot_plot <- function(data.features = NULL,
       start <- start+1
     }
   }
-  
   cnt <- 1
   #print('l_data:')
   while(cnt<1000){
@@ -704,6 +725,7 @@ split_dot_plot <- function(data.features = NULL,
       break
     }
   }
+  tmp_p_2 <<- p
   return(p)
 }
 
