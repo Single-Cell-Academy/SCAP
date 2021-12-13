@@ -114,6 +114,7 @@ output$featureplot_2 <- renderPlotly({
 
 #-- Find the markers for the 1) selected cells compared to all other cells or
 #-- 2) the markers that define each group. Depending on if cells are selected or not
+t <- NULL
 observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handlerExpr = {
   if(input$find.markers == 0){ # Don't run before button click
     output$markers <- NULL
@@ -138,18 +139,27 @@ observeEvent(input$find.markers, ignoreNULL = FALSE, ignoreInit = FALSE, handler
       
       scanpy$tl$rank_genes_groups(rvalues$h5ad[[1]], groupby = 'scap_find_markers_groups', use_raw = use_raw(rvalues$h5ad[[1]]), method = 'wilcoxon') # find DEGs
       
-      t <- rank_genes_groups_df(rvalues$h5ad[[1]]) # Create a dataframe of DE results
-      t$group <- py_to_r(attr(t, which='pandas.index')$tolist()) # some crpytic code that's required so an error doesn't occur
-      colnames(t) <- c('feature', 'score', 'pval', 'pval_adj', 'logFC', 'group')
-      t <- t[,c(1, ncol(t), 2:(ncol(t)-1))]
+      t <<- rank_genes_groups_df(rvalues$h5ad[[1]]) # Create a dataframe of DE results
+      t$group <<- py_to_r(attr(t, which='pandas.index')$tolist()) # some crpytic code that's required so an error doesn't occur
+      colnames(t) <<- c('feature', 'score', 'pval', 'pval_adj', 'logFC', 'group')
+      t <<- t[,c(1, ncol(t), 2:(ncol(t)-1))]
       if(!is.null(cells)){ # if cells were selected on the scatter plots, only show these cells.
-        t <- t[which(t$group == "Selected"),]
+        t <<- t[which(t$group == "Selected"),]
       }
       return(t %>% arrange(desc(logFC)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c('score', 'pval', 'pval_adj', 'logFC'), digits=3))
       #return(t %>% arrange(desc(Specificity)) %>% DT::datatable(filter = 'top') %>% DT::formatRound(columns=c("avgExpr", "logFC", "pval", "padj", "pct_in", "pct_out", "Specificity"), digits=3))
     })
   }
 })
+
+output$downloadData <- downloadHandler(
+  filename = function() {
+    paste("data-", Sys.Date(), ".csv", sep="")
+  },
+  content = function(file) {
+    write.csv(t, file)
+  }
+)
 
 #-- display selected grouping name --#
 output$annotation_title <- renderText({

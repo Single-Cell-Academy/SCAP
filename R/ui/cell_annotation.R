@@ -84,8 +84,19 @@ tabPanel(
           column(
             width = 8,
             fluidRow(
-              h2('Find the defining markers of the selected cells', style = 'text-align: center;'),
-              actionButton('find.markers', "Find Markers for Selected Cells"),
+              h2('Find the defining markers of the selected cells', style = 'text-align: center;')
+            ),
+            fluidRow(
+              column(
+                width = 4,
+                actionButton('find.markers', "Find Markers for Selected Cells")
+              ),
+              column(
+                width = 2,
+                downloadButton("downloadData", "Download")
+              )
+            ),
+            fluidRow(
               h4('To clear selection... Double click on either plot and click button')
             ),
             fluidRow(
